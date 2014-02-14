@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<atlassian-plugin key="${project.groupId}.${project.artifactId}" name="${project.name}" plugins-version="2">
+
+  <plugin-info>
+    <description>${project.description}</description>
+    <version>${project.version}</version>
+    <vendor name="${project.organization.name}" url="${project.organization.url}"/>
+  </plugin-info>
+
+  <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
+
+  <component key="search-update-job-factory" class="com.palantir.stash.codesearch.updater.SearchUpdateJobFactoryImpl" public="true">
+    <interface>com.palantir.stash.codesearch.updater.SearchUpdateJobFactory</interface>
+  </component>
+
+  <component key="search-updater" class="com.palantir.stash.codesearch.updater.SearchUpdaterImpl" public="true">
+    <interface>com.palantir.stash.codesearch.updater.SearchUpdater</interface>
+  </component>
+
+  <servlet key="search-servlet" class="com.palantir.stash.codesearch.servlet.SearchServlet">
+    <description key="search-servlet.description">Codesearch Servlet</description>
+    <url-pattern>/codesearch</url-pattern>
+  </servlet>
+
+  <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
+    <directory location="/templates/"/>
+    <dependency>com.atlassian.stash.stash-web-plugin:global</dependency>
+  </stash-resource>
+
+  <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
+  <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
+
+  <repository-hook name="Search Updater Hook (post-receive)" key="post-receive-updater-hook" class="com.palantir.stash.codesearch.hook.PostReceiveUpdaterHook">
+    <description key="post-receive-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on pushes.</description>
+    <icon>icon-example.png</icon>
+  </repository-hook>
+
+  <repository-hook name="Search Updater Hook (merge)" key="merge-updater-hook" class="com.palantir.stash.codesearch.hook.MergeUpdaterHook">
+    <description key="merge-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on merges.</description>
+    <icon>icon-example.png</icon>
+  </repository-hook>
+
+</atlassian-plugin>

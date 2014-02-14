@@ -1,0 +1,75 @@
+{namespace plugin.codesearch}
+
+/**
+ * Search page template
+ * @param hasResults
+ */
+{template .searchPage}
+<html>
+<meta name="decorator" content="atl.general">
+<head>
+<title>Stash Codesearch</title>
+</head>
+<body>
+
+<div style="margin-top:15px; margin-left:15px; margin-bottom:15px;">
+<h1>Stash Codesearch</h2>
+<form class="aui" id="search-form" {if $hasResults}hidden{/if}>
+    <input type="hidden" name="has-results" value="true">
+    <fieldset class="group">
+        <div class="field-group">
+            <label for="search-string">Search string</label>
+            <input class="text medium-field" type="text" id="search-string" name="search-string">
+            <div class="description">String to search for in source code, commit messages and filenames</div>
+        </div>
+    </fieldset>
+    <h3>Filters (optional)</h3>
+    <fieldset class="group">
+        <div class="checkbox">
+            <label for="search-code">Search code</label>
+            <input class="checkbox" type="checkbox" name="search-code" id="search-code" checked>
+        </div>
+        <div class="checkbox">
+            <label for="search-filenames">Search filenames</label>
+            <input class="checkbox" type="checkbox" name="search-filenames" id="search-filenames" checked>
+        </div>
+        <div class="checkbox">
+            <label for="search-commits">Search commits</label>
+            <input class="checkbox" type="checkbox" name="search-commits" id="search-commits" checked>
+        </div>
+        <div class="field-group">
+            <label for="project-keys">Project keys</label>
+            <input class="text medium-field" type="text" name="project-keys" id="project-keys" placeholder="Default: any project">
+            <div class="description">Space-separated</div>
+        </div>
+        <div class="field-group">
+            <label for="repo-names">Repository names</label>
+            <input class="text medium-field" type="text" name="repo-names" id="repo-names" placeholder="Default: any repo">
+            <div class="description">Space-separated</div>
+        </div>
+        <div class="field-group">
+            <label for="branch-names">Branch names</label>
+            <input class="text medium-field" type="text" name="branch-names" id="branch-names" placeholder="Default: any branch">
+            <div class="description">Space-separated</div>
+        <div class="field-group">
+            <label for="author-name">Author/editor name or email</label>
+            <input class="text medium-field" type="text" id="author-name" name="author-name" placeholder="Default: any author">
+        </div>
+        <div class="field-group">
+            <label for="branch-name">
+        </div>
+    </fieldset>
+    <div class="buttons-container">
+        <div class="buttons">
+            <input class="button submit" type="submit" value="Search" id="search-button">
+        </div>
+    </div>
+</form>
+<div id="search-query-toggle"{if not $hasResults}hidden{/if}>
+<button class="aui-button aui-button-primary" onclick="AJS.$('#search-form').show(); AJS.$('#search-query-toggle').hide();">Search again</button>
+</div>
+</div>
+
+</body>
+</html>
+{/template}
