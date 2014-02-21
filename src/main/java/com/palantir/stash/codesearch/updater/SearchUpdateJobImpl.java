@@ -27,6 +27,8 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     private static final String EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
+    private static final String NULL_HASH = "0000000000000000000000000000000000000000";
+
     private static final String AUTHOR_NAME = "Stash Codesearch";
 
     private static final String AUTHOR_EMAIL = "codesearch@noreply";
@@ -76,66 +78,53 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     /**
-     * For incremental updates, we annotate the latest indexed commit in each branch. The following
-     * four methods provide note reading, adding, and deleting functionality.
+     * For incremental updates, we store the hashes of each branch's latest indexed commit in
+     * ES_UPDATEALIAS. The following three methods provide note reading, adding, and deleting
+     * functionality.
      */
-    private String getNotesRef () {
-        return "refs/notes/stashcodesearch/index/" + branch.getId();
-    }
 
     // Returns EMPTY_TREE if no commits were indexed before this.
-    private String getLatestIndexedHash (GitCommandBuilderFactory builderFactory) {
-        String listOutput;
+    private String getLatestIndexedHash () {
         try {
-            listOutput = builderFactory.builder(repository)
-                .command("notes")
-                .argument("--ref").argument(getNotesRef())
-                .argument("list")
-                .build(new StringOutputHandler()).call();
+            String hash = ES_CLIENT.prepareGet(ES_UPDATEALIAS, "latestindexed", toString())
+                .get().getSourceAsMap().get("hash").toString();
+            if (hash != null && hash.length() == 40) {
+                return hash;
+            }
         } catch (Exception e) {
-            log.warn("Caught error while searching for notes in ref {}", getNotesRef(), e);
-            return EMPTY_TREE;
-        }
-        String [] toks = listOutput.split("\\s+");
-        if (toks.length > 1) {
-            return toks[1].length() == 40 ? toks[1] : EMPTY_TREE;
+            log.warn("Caught error getting the latest indexed commit for {}, returning EMPTY_TREE",
+                toString(), e);
         }
         return EMPTY_TREE;
     }
 
-    // Returns true iff successful.
-    private boolean deleteLatestIndexedNote (GitCommandBuilderFactory builderFactory) {
-        String prevHash;
-        while (!EMPTY_TREE.equals(prevHash = getLatestIndexedHash(builderFactory))) {
-            try {
-                builderFactory.builder(repository)
-                    .command("notes")
-                    .argument("--ref").argument(getNotesRef())
-                    .argument("remove")
-                    .argument(prevHash)
-                    .build(new StringOutputHandler()).call();
-            } catch (Exception e) {
-                log.error("Caught error while deleting note at {}", prevHash, e);
-                return false;
-            }
+    // Returns true iff successful
+    private boolean deleteLatestIndexedNote () {
+        try {
+            ES_CLIENT.prepareDelete(ES_UPDATEALIAS, "latestindexed", toString()).get();
+        } catch (Exception e) {
+            log.error("Caught error deleting the latest indexed commit note for {} from the index",
+                toString(), e);
+            return false;
         }
         return true;
     }
 
     // Returns true iff successful
-    private boolean addLatestIndexedNote (GitCommandBuilderFactory builderFactory,
-            String commitHash) {
-        deleteLatestIndexedNote(builderFactory);
+    private boolean addLatestIndexedNote (String commitHash) {
         try {
-            builderFactory.builder(repository)
-                .command("notes")
-                .argument("--ref").argument(getNotesRef())
-                .argument("add")
-                .argument("-m").argument("Latest indexed")
-                .argument(commitHash)
-                .build(new StringOutputHandler()).call();
+            ES_CLIENT.prepareIndex(ES_UPDATEALIAS, "latestindexed", toString())
+                .setSource(jsonBuilder()
+                .startObject()
+                    .field("project", repository.getProject().getKey())
+                    .field("repository", repository.getSlug())
+                    .field("branch", branch.getId())
+                    .field("hash", commitHash)
+                .endObject())
+                .get();
         } catch (Exception e) {
-            log.error("Caught error while adding note at {}", commitHash, e);
+            log.error("Caught error adding the latest indexed hash {}:{} to the index",
+                toString(), commitHash, e);
             return false;
         }
         return true;
@@ -163,8 +152,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     @Override
     public void doReindex (GitScm gitScm) {
-        GitCommandBuilderFactory builderFactory = gitScm.getCommandBuilderFactory();
-        deleteLatestIndexedNote(builderFactory);
+        deleteLatestIndexedNote();
         /* TODO: delete existing entries
         ES_CLIENT.prepareDeleteByQuery(ES_UPDATEALIAS)
             .setQuery(boolQuery().must("3)
@@ -188,7 +176,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         String branchDesc = toString();
 
         // Hash of latest indexed commit
-        String prevHash = getLatestIndexedHash(builderFactory);
+        String prevHash = getLatestIndexedHash();
 
         // Hash of latest commit on branch
         String newHash = getLatestHash(builderFactory);
@@ -399,7 +387,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Update latest indexed note
-        addLatestIndexedNote(builderFactory, newHash);
+        addLatestIndexedNote(newHash);
    }
 
 }
