@@ -104,7 +104,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
      */
     private synchronized boolean initializeAliasedIndex (String alias, boolean overwrite) {
         String prevIndex = getIndexFromAlias(alias);
-        if (overwrite && prevIndex != null) {
+        if (!overwrite && prevIndex != null) {
             return false;
         }
 
