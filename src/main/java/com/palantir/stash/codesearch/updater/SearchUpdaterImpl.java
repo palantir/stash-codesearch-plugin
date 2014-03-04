@@ -23,10 +23,9 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.security.SecureRandom;
 
+import static org.elasticsearch.common.xcontent.XContentFactory.*;
 import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
-
-import java.util.Arrays;
 public class SearchUpdaterImpl implements SearchUpdater {
 
     // TODO: make this configurable (figure out atlassian plugin settings)
@@ -110,8 +109,115 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
         // Generate new index -- TODO: mappings & analyzers
         String newIndex = random.nextLong() + "-" + System.nanoTime();
-        ES_CLIENT.admin().indices().prepareCreate(newIndex)
-            .get();
+        try {
+            ES_CLIENT.admin().indices().prepareCreate(newIndex)
+                // Commit schema
+                .addMapping("commit",
+                    jsonBuilder().startObject()
+                        .startObject("properties")
+                            .startObject("project")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("repository")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("refs")
+                                .field("type", "string")
+                                .field("index_analyzer", "ref_analyzer")
+                                .field("search_analyzer", "ref_analyzer")
+                            .endObject()
+                            .startObject("authorname")
+                                .field("type", "string")
+                                .field("index_analyzer", "name_analyzer")
+                                .field("search_analyzer", "name_analyzer")
+                            .endObject()
+                            .startObject("authoremail")
+                                .field("type", "string")
+                                .field("index_analyzer", "email_analyzer")
+                                .field("search_analyzer", "email_analyzer")
+                            .endObject()
+                            .startObject("body")
+                                .field("type", "string")
+                            .endObject()
+                            .startObject("subject")
+                                .field("type", "string")
+                            .endObject()
+                            .startObject("commitdate")
+                                .field("type", "date")
+                                .field("format", "date_time")
+                            .endObject()
+                            .startObject("hash")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                        .endObject()
+                    .endObject())
+                // File schema
+                .addMapping("file",
+                    jsonBuilder().startObject()
+                        .startObject("properties")
+                            .startObject("project")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("repository")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("refs")
+                                .field("type", "string")
+                                .field("index_analyzer", "ref_analyzer")
+                                .field("search_analyzer", "ref_analyzer")
+                            .endObject()
+                            .startObject("blob")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("path")
+                                .field("type", "string")
+                                .field("index_analyzer", "path_analyzer")
+                                .field("search_analyzer", "path_analyzer")
+                            .endObject()
+                            .startObject("contents")
+                                .field("type", "string")
+                                .field("index_analyzer", "code_analyzer")
+                                .field("search_analyzer", "code_analyzer")
+                            .endObject()
+                        .endObject()
+                    .endObject())
+                .setSettings(
+                    jsonBuilder().startObject()
+                        .startObject("analysis")
+                            .startObject("analyzer")
+                                .startObject("email_analyzer")
+                                    .field("type", "pattern")
+                                .endObject()
+                                .startObject("name_analyzer")
+                                    .field("type", "pattern")
+                                .endObject()
+                                .startObject("ref_analyzer")
+                                    .field("type", "pattern")
+                                    .field("pattern", "/")
+                                .endObject()
+                                .startObject("code_analyzer")
+                                    .field("type", "pattern")
+                                .endObject()
+                                .startObject("path_analyzer")
+                                    .field("type", "pattern")
+                                    .field("pattern", "[/\\\\.]")
+                                .endObject()
+                            .endObject()
+                            .startObject("filter")
+                            .endObject()
+                        .endObject()
+                    .endObject())
+                .get();
+        } catch (Exception e) {
+            log.error("Caught exception while creating {} ({}), aborting", newIndex, alias, e);
+            return false;
+        }
 
         // Perform alias switch
         IndicesAliasesRequestBuilder aliasBuilder = ES_CLIENT.admin().indices().prepareAliases();

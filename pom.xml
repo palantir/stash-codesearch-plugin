@@ -5,7 +5,7 @@
     <groupId>com.palantir.stash</groupId>
     <artifactId>stash-code-search</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>Stash Code Search</name>
+    <name>Stash Codesearch</name>
     <description>Provides global repository, commit, and file content search for Stash instances</description>
     <packaging>atlassian-plugin</packaging>
     <organization>
@@ -95,6 +95,11 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>com.atlassian.plugins</groupId>
+            <artifactId>atlassian-plugins-webresource</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <scope>provided</scope>
@@ -113,6 +118,11 @@
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch</artifactId>
             <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+            <version>2.3</version>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>

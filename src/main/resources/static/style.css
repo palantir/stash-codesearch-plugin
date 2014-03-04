@@ -1,0 +1,94 @@
+.page-container {
+    padding-top:20px;
+    padding-bottom:20px;
+    padding-left:20px;
+    padding-right:20px;
+}
+
+.paging-row {
+    margin-top:40px;
+}
+
+.result-container {
+    border:1px solid gray;
+    border-radius:6px;
+    background-color:#FFFFFF;
+    padding-top:9px;
+    padding-bottom:12px;
+    padding-left:10px;
+    padding-right:10px;
+    margin-top:25px;
+}
+
+.result-title {
+    margin-top:0px;
+    margin-bottom:5px;
+}
+
+.result-header {
+    font-size:100%;
+}
+
+.ref-link {
+    color:#A0900A;
+}
+
+.commit-hash {
+    font-family:monospace;
+}
+
+.file-name {
+    font-family:monospace;
+}
+
+.text-view-container {
+    margin-top:15px;
+    font-size:85%;
+}
+
+.view-label {
+    color:#FFFFFF;
+    font-weight:bold;
+    background-color:#A0A0A0;
+    padding-left:6px;
+    padding-right:6px;
+    padding-top:2px;
+    border-radius: 7px 7px 0 0;
+    border:1px solid #A0A0A0;
+}
+
+.text-view {
+    color:#606060;
+    background-color:#F6F6F6;
+    padding-left:10px;
+    padding-right:10px;
+    padding-top:5px;
+    padding-bottom:5px;
+    border-radius: 0 0 7px 7px;
+    border:1px solid #A0A0A0;
+}
+
+.commit-subject {
+    color:#A000B0;
+}
+
+.result-count {
+    margin-top:15px;
+}
+
+.no-results {
+    margin-top:20px;
+    color:#D00000;
+}
+
+.line-numbers {
+    color:#909090;
+    display:table-cell;
+    padding-right:6px;
+    border-right:1px solid gray;
+}
+
+.source-code {
+    padding-left:12px;
+    display:table-cell;
+}
