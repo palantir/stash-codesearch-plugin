@@ -1,62 +1,96 @@
-{namespace plugin.codesearch}
+{namespace plugin.page.codesearch}
 
 /**
  * Search page template
- * @param hasResults
+ * @param doSearch
+ * @param hitArray
+ * @param pages
+ * @param currentPage
+ * @param fullUri
+ * @param uriPrefix
+ * @param totalHits
+ * @param resultFrom
+ * @param resultTo
+ * @param prevParams
+ * @param searchTime
+ * @param error
  */
 {template .searchPage}
+
 <html>
+
 <meta name="decorator" content="atl.general">
+
 <head>
-<title>Stash Codesearch</title>
+    <title>Stash Codesearch</title>
 </head>
+
 <body>
 
-<div style="margin-top:15px; margin-left:15px; margin-bottom:15px;">
-<h1>Stash Codesearch</h2>
-<form class="aui" id="search-form" {if $hasResults}hidden{/if}>
+{literal}
+<script>
+    hljs.configure({tabReplace: '    '});
+    hljs.initHighlightingOnLoad();
+</script>
+{/literal}
+
+<div class="page-container">
+
+<h1>Stash Codesearch</h1>
+
+<form class="aui" id="search-form" {if $doSearch}hidden{/if}>
     <input type="hidden" name="has-results" value="true">
     <fieldset class="group">
         <div class="field-group">
-            <label for="search-string">Search string</label>
-            <input class="text medium-field" type="text" id="search-string" name="search-string">
-            <div class="description">String to search for in source code, commit messages and filenames</div>
+            <label for="searchString">Search string</label>
+            <input class="text medium-field" type="text" id="searchString" name="searchString" {if $prevParams.searchString}value="{$prevParams.searchString}"{/if}>
+            <div class="description">
+                String to search for in source code, commit messages and filenames.
+                Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.</div>
         </div>
     </fieldset>
     <h3>Filters (optional)</h3>
     <fieldset class="group">
         <div class="checkbox">
-            <label for="search-code">Search code</label>
-            <input class="checkbox" type="checkbox" name="search-code" id="search-code" checked>
+            <label for="searchCode">Search code</label>
+            <input class="checkbox" type="checkbox" name="searchCode" id="searchCode" {if $prevParams.searchCode}checked{/if}>
         </div>
         <div class="checkbox">
-            <label for="search-filenames">Search filenames</label>
-            <input class="checkbox" type="checkbox" name="search-filenames" id="search-filenames" checked>
+            <label for="searchFilenames">Search filenames</label>
+            <input class="checkbox" type="checkbox" name="searchFilenames" id="searchFilenames" {if $prevParams.searchFilenames == null or $prevParams.searchFilenames}checked{/if}>
         </div>
         <div class="checkbox">
-            <label for="search-commits">Search commits</label>
-            <input class="checkbox" type="checkbox" name="search-commits" id="search-commits" checked>
+            <label for="searchCommits">Search commits</label>
+            <input class="checkbox" type="checkbox" name="searchCommits" id="searchCommits" {if $prevParams.searchCommits == null or $prevParams.searchCommits}checked{/if}>
         </div>
         <div class="field-group">
-            <label for="project-keys">Project keys</label>
-            <input class="text medium-field" type="text" name="project-keys" id="project-keys" placeholder="Default: any project">
-            <div class="description">Space-separated</div>
+            <label for="projectKeys">Project keys</label>
+            <input class="text medium-field" type="text" name="projectKeys" id="projectKeys" placeholder="Default: any project" {if $prevParams.projectKeys}value="{$prevParams.projectKeys}"{/if}>
+            <div class="description">Comma-separated</div>
         </div>
         <div class="field-group">
-            <label for="repo-names">Repository names</label>
-            <input class="text medium-field" type="text" name="repo-names" id="repo-names" placeholder="Default: any repo">
-            <div class="description">Space-separated</div>
+            <label for="repoNames">Repository names</label>
+            <input class="text medium-field" type="text" name="repoNames" id="repoNames" placeholder="Default: any repo" {if $prevParams.repoNames}value="{$prevParams.repoNames}"{/if}>
+            <div class="description">Comma-separated</div>
         </div>
         <div class="field-group">
-            <label for="branch-names">Branch names</label>
-            <input class="text medium-field" type="text" name="branch-names" id="branch-names" placeholder="Default: any branch">
-            <div class="description">Space-separated</div>
+            <label for="refNames">Ref names</label>
+            <input class="text medium-field" type="text" name="refNames" id="refNames" placeholder="Default: any ref" {if $prevParams.refNames}value="{$prevParams.refNames}"{/if}>
+            <div class="description">Comma-separated</div>
         <div class="field-group">
-            <label for="author-name">Author/editor name or email</label>
-            <input class="text medium-field" type="text" id="author-name" name="author-name" placeholder="Default: any author">
+            <label for="authorNames">Author/editor names or emails</label>
+            <input class="text medium-field" type="text" id="authorNames" name="authorNames" placeholder="Default: any author" {if $prevParams.authorNames}value="{$prevParams.authorNames}"{/if}>
+            <div class="description">Comma-separated, commits only</div>
         </div>
         <div class="field-group">
-            <label for="branch-name">
+            <label for="committedAfter">Committed on or after</label>
+            <input class="aui-date-picker" id="committedAfter" name="committedAfter" type="date" {if $prevParams.committedAfter}value="{$prevParams.committedAfter}"{/if}>
+            <div class="description">Commits only</div>
+        </div>
+        <div class="field-group">
+            <label for="committedBefore">Committed on or before</label>
+            <input class="aui-date-picker" id="committedBefore" name="committedBefore" type="date" {if $prevParams.committedBefore}value="{$prevParams.committedBefore}"{/if}>
+            <div class="description">Commits only</div>
         </div>
     </fieldset>
     <div class="buttons-container">
@@ -65,10 +99,93 @@
         </div>
     </div>
 </form>
-<div id="search-query-toggle"{if not $hasResults}hidden{/if}>
-<button class="aui-button aui-button-primary" onclick="AJS.$('#search-form').show(); AJS.$('#search-query-toggle').hide();">Search again</button>
+
+<div id="search-query-toggle" {if not $doSearch}hidden{/if}>
+    <button class="aui-button aui-button-primary" onclick="AJS.$('#search-form').show(); AJS.$('#search-query-toggle').hide();">Search again</button>
 </div>
+
+{if $totalHits > 0}
+<div class="result-count">
+    Showing results {$resultFrom}-{$resultTo} ({$totalHits} total), took {$searchTime} ms
 </div>
+{/if}
+
+{foreach $hit in $hitArray}
+<div class="aui-group result-container">
+
+    {let $iscommit: $hit.type == 'commit'/}
+    {let $isfile: $hit.type == 'file'/}
+
+    // Show repo, project, and refs
+    <span class="result-header">
+        <a href="{$uriPrefix}/projects/{$hit.project}">{$hit.projectname} </a>/
+        <a href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}"> {$hit.repositoryname}</a>
+        &nbsp;&nbsp;[
+        {foreach $ref in $hit.refs}
+            &nbsp;<a class="ref-link" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/browse?at={$ref}">{$ref}</a>&nbsp;
+        {/foreach}
+        ]
+    </span>
+
+    // Show title (hash or path)
+    <h3 class="result-title">
+    {if $iscommit}
+        Commit <b><a class="commit-hash" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/commits/{$hit.hash}">{$hit.hash}</a></b>
+    {elseif $isfile}
+        File <b><a class="file-name" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/browse/{$hit.path}?at={$hit.primaryRef}">{$hit.path}</a></b>
+    {/if}
+    </h3>
+
+    // Show commit subject & body
+    {if $iscommit}
+        <b class="commit-subject">{$hit.subject}</b>
+        <i> by <a href="mailto:{$hit.authorEmail}">{$hit.authorName}</a> on {$hit.commitDate}</i>
+        {if $hit.body}
+            <div class="text-view-container">
+                <div class="view-label">Message body</div>
+                <div class="text-view"><pre>{$hit.body}</pre></div>
+            </div>
+        {/if}
+
+    // Show file contents
+    {elseif $isfile}
+        <div class="container text-view-container">
+            <div class="view-label">
+                {$hit.isPreview ? 'Preview' : 'Matching Lines'}
+                {if $hit.excessLines > 0}<span> ({$hit.shownLines} of {$hit.shownLines + $hit.excessLines} lines shown)</span>{/if}
+            </div>
+            <div class="text-view">
+                <div class="inline-block line-numbers">
+                    <pre>{$hit.sourceLineNums}</pre>
+                </div>
+                <div class="inline-block source-code">
+                    <pre class="{if $hit.noHighlight}no-highlight{/if} {if $hit.extension}lang-{$hit.extension}{else}{/if}">
+                        <code>{$hit.sourceLines}</code>
+                    </pre>
+                </div>
+            </div>
+        </div>
+    {/if}
+</div>
+{/foreach}
+
+// Pagination
+{if $doSearch and $totalHits > 0 and not $error}
+<div class="paging-row">
+    Page:
+    {for $i in range($pages)}
+        <span class="pageno">&nbsp;&nbsp;&nbsp;
+        {if $i == $currentPage}
+            <b>{$i + 1}</b>
+        {else}
+            <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+        {/if}
+        </span>
+    {/for}
+</div>
+{elseif $doSearch}
+<div class="no-results">No results. {$error}</div>
+{/if}
 
 </body>
 </html>

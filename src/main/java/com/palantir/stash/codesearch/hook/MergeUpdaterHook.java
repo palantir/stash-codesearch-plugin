@@ -1,13 +1,10 @@
 package com.palantir.stash.codesearch.hook;
 
-import com.atlassian.stash.hook.repository.*;
-import com.atlassian.stash.pull.*;
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.setting.*;
-import java.util.regex.Pattern;
+import com.atlassian.stash.pull.PullRequestRef;
+import com.atlassian.stash.scm.pull.*;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 
-public class MergeUpdaterHook implements RepositoryMergeRequestCheck, RepositorySettingsValidator {
+public class MergeUpdaterHook implements MergeRequestCheck {
 
     /**
      * We should allocate some time for the merge to occur before indexing. Unfortunately, there's
@@ -22,15 +19,9 @@ public class MergeUpdaterHook implements RepositoryMergeRequestCheck, Repository
     }
 
     @Override
-    public void check (RepositoryMergeRequestCheckContext context) {
-        PullRequestRef pr = context.getMergeRequest().getPullRequest().getToRef();
+    public void check (MergeRequest request) {
+        PullRequestRef pr = request.getPullRequest().getToRef();
         updater.submitAsyncUpdate(pr.getRepository(), pr.getId(), MERGE_UPDATE_DELAY);
-    }
-
-    @Override
-    public void validate (Settings settings, SettingsValidationErrors errors,
-            Repository repository) {
-        // No settings to validate
     }
 
 }
