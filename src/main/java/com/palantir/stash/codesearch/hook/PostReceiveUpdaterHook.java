@@ -1,3 +1,7 @@
+/**
+ * Hook for updating search index on pushes to Stash.
+ */
+
 package com.palantir.stash.codesearch.hook;
 
 import com.atlassian.stash.hook.*;
