@@ -4,14 +4,14 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.atlassian.stash.scm.CommandInputHandler;
 import com.atlassian.utils.process.Watchdog;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class CatFileInputHandler implements CommandInputHandler {
 

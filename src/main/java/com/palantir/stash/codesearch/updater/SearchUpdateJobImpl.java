@@ -1,15 +1,10 @@
 /**
- * Default implementation of SearchUpdateJobImpl that incrementally indexes a branch's source code.
+ * Default implementation of SearchUpdateJobImpl that incrementally indexes a ref's source code
+ * and commits.
  */
 
 package com.palantir.stash.codesearch.updater;
 
-import org.apache.commons.lang.ArrayUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.elasticsearch.action.bulk.*;
-import org.elasticsearch.action.update.UpdateRequestBuilder;
-import org.elasticsearch.common.xcontent.XContentBuilder;
 import com.atlassian.stash.repository.*;
 import com.atlassian.stash.scm.git.*;
 import com.google.common.collect.ImmutableList;
@@ -20,11 +15,20 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.commons.lang.ArrayUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.elasticsearch.action.bulk.*;
+import org.elasticsearch.action.search.*;
+import org.elasticsearch.action.update.UpdateRequestBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.search.SearchHit;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.*;
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
+import static com.palantir.stash.codesearch.search.SearchFilters.*;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.FilterBuilders.*;
 import static org.elasticsearch.index.query.QueryBuilders.*;
-import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
 class SearchUpdateJobImpl implements SearchUpdateJob {
 
@@ -45,11 +49,11 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     private final Repository repository;
 
-    private final Branch branch;
+    private final String ref;
 
-    public SearchUpdateJobImpl (Repository repository, Branch branch) {
+    public SearchUpdateJobImpl (Repository repository, String ref) {
         this.repository = repository;
-        this.branch = branch;
+        this.ref = ref;
     }
 
     @Override
@@ -60,7 +64,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         SearchUpdateJobImpl other = (SearchUpdateJobImpl) o;
         return repository.getSlug().equals(other.repository.getSlug()) &&
             repository.getProject().getKey().equals(other.repository.getProject().getKey()) &&
-            branch.getId().equals(other.branch.getId());
+            ref.equals(other.ref);
     }
 
     @Override
@@ -74,7 +78,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     @Override
     public String toString () {
-        return getRepoDesc() + "^" + branch.getId();
+        return getRepoDesc() + "^" + ref;
     }
 
     @Override
@@ -83,12 +87,12 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     @Override
-    public Branch getBranch () {
-        return branch;
+    public String getRef () {
+        return ref;
     }
 
     /**
-     * For incremental updates, we store the hashes of each branch's latest indexed commit in
+     * For incremental updates, we store the hashes of each ref's latest indexed commit in
      * ES_UPDATEALIAS. The following three methods provide note reading, adding, and deleting
      * functionality.
      */
@@ -128,7 +132,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 .startObject()
                     .field("project", repository.getProject().getKey())
                     .field("repository", repository.getSlug())
-                    .field("ref", branch.getId())
+                    .field("ref", ref)
                     .field("hash", commitHash)
                 .endObject())
                 .get();
@@ -140,13 +144,13 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         return true;
     }
 
-    // Returns the hash of the latest commit on the job's branch (null if not found)
+    // Returns the hash of the latest commit on the job's ref (null if not found)
     private String getLatestHash (GitCommandBuilderFactory builderFactory) {
         try {
             String newHash = builderFactory.builder(repository)
                 .command("show-ref")
                 .argument("--verify")
-                .argument(branch.getId())
+                .argument(ref)
                 .build(new StringOutputHandler()).call()
                 .split("\\s+")[0];
             if (newHash.length() != 40) {
@@ -155,70 +159,78 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
             }
             return newHash;
         } catch (Exception e) {
-            log.error("Caught error while trying to resolve {}", branch.getId(), e);
+            log.error("Caught error while trying to resolve {}", ref, e);
             return null;
         }
+    }
+
+    // Returns a request to delete the ref from an arbitrary document with a refs field
+    private UpdateRequestBuilder buildDeleteFromRef (String type, String id) {
+        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, type, id)
+            .setScript("ctx._source.refs.contains(ref) ? ((ctx._source.refs.size() > 1) " +
+                       "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
+            .setScriptLang("mvel")
+            .addScriptParam("ref", ref)
+            .setRetryOnConflict(MAX_ES_RETRIES)
+            .setRouting(getRepoDesc());
+    }
+
+    // Returns a request to add the ref to an arbitrary document with a refs field
+    private UpdateRequestBuilder buildAddToRef (String type, String id) {
+        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, type, id)
+            .setScript("ctx._source.refs.contains(ref) " +
+                       "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
+            .setScriptLang("mvel")
+            .addScriptParam("ref", ref)
+            .setRetryOnConflict(MAX_ES_RETRIES)
+            .setRouting(getRepoDesc());
     }
 
     // Returns a request to delete a blob/path pair from the index.
     private UpdateRequestBuilder buildDeleteFileFromRef (String blob, String path) {
         String fileId = getRepoDesc() + "^" + blob + "^:/" + path;
-        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, "file", fileId)
-            .setScript("ctx._source.refs.contains(ref) ? ((ctx._source.refs.size() > 1) " +
-                       "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
-            .setScriptLang("mvel")
-            .addScriptParam("ref", branch.getId())
-            .setRetryOnConflict(MAX_ES_RETRIES)
-            .setRouting(getRepoDesc());
+        return buildDeleteFromRef("file", fileId);
     }
 
     // Returns a request to add a file to a ref via an update script. Will fail if document is not
     // in the index.
     private UpdateRequestBuilder buildAddFileToRef (String blob, String path) {
         String fileId = getRepoDesc() + "^" + blob + "^:/" + path;
-        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, "file", fileId)
-            .setScript("ctx._source.refs.contains(ref) " +
-                       "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
-            .setScriptLang("mvel")
-            .addScriptParam("ref", branch.getId())
-            .setRetryOnConflict(MAX_ES_RETRIES)
-            .setRouting(getRepoDesc());
-    }
+        return buildAddToRef("file", fileId);
+   }
 
     // Returns a request to delete a commit from the index.
     private UpdateRequestBuilder buildDeleteCommitFromRef (String commitHash) {
         String commitId = getRepoDesc() + "^" + commitHash;
-        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, "commit", commitId)
-            .setScript("ctx._source.refs.contains(ref) ? ((ctx._source.refs.size() > 1) " +
-                       "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
-            .setScriptLang("mvel")
-            .addScriptParam("ref", branch.getId())
-            .setRetryOnConflict(MAX_ES_RETRIES)
-            .setRouting(getRepoDesc());
+        return buildDeleteFromRef("commit", commitId);
     }
 
     // Returns a request to add a commit to a ref via an update script. Will fail if document is not
     // in the index.
     private UpdateRequestBuilder buildAddCommitToRef (String commitHash) {
         String commitId = getRepoDesc() + "^" + commitHash;
-        return ES_CLIENT.prepareUpdate(ES_UPDATEALIAS, "commit", commitId)
-            .setScript("ctx._source.refs.contains(ref) " +
-                       "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
-            .setScriptLang("mvel")
-            .addScriptParam("ref", branch.getId())
-            .setRetryOnConflict(MAX_ES_RETRIES)
-            .setRouting(getRepoDesc());
+        return buildAddToRef("commit", commitId);
     }
 
     @Override
     public void doReindex (GitScm gitScm) {
         deleteLatestIndexedNote();
-        /* TODO: delete existing entries
-        ES_CLIENT.prepareDeleteByQuery(ES_UPDATEALIAS)
-            .setQuery(boolQuery().must("3)
-            .execute()
-            .actionGet()
-        */
+        SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_UPDATEALIAS)
+            .setFetchSource(false)
+            .setSize(Integer.MAX_VALUE - 99)
+            .setQuery(filteredQuery(matchAllQuery(), andFilter(
+                projectRepositoryFilter(repository.getProject().getKey(), repository.getSlug()),
+                exactRefFilter(ref))));
+        try {
+            BulkRequestBuilder bulkDelete = ES_CLIENT.prepareBulk();
+            for (SearchHit hit : esReq.get().getHits().getHits()) {
+                bulkDelete.add(buildDeleteFromRef(hit.getType(), hit.getId()));
+            }
+            bulkDelete.get();
+        } catch (Exception e) {
+            log.error("Could not delete documents for {}, aborting", toString(), e);
+            return;
+        }
         doUpdate(gitScm);
     }
 
@@ -232,13 +244,13 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // Unique identifier for repo
         String repoDesc = getRepoDesc();
 
-        // Unique identifier for branch
-        String branchDesc = toString();
+        // Unique identifier for ref 
+        String refDesc = toString();
 
         // Hash of latest indexed commit
         String prevHash = getLatestIndexedHash();
 
-        // Hash of latest commit on branch
+        // Hash of latest commit on ref
         String newHash = getLatestHash(builderFactory);
         if (newHash == null) {
             log.error("Aborting since hash is invalid");
@@ -404,7 +416,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                                 .field("path", path)
                                 .field("contents", fileContent)
                                 .startArray("refs")
-                                    .value(branch.getId())
+                                    .value(ref)
                                 .endArray()
                             .endObject()));
                     }
@@ -492,7 +504,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                         .field("subject", subject)
                         .field("body", body)
                         .startArray("refs")
-                            .value(branch.getId())
+                            .value(ref)
                         .endArray()
                     .endObject())
                 );

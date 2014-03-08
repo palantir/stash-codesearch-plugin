@@ -4,6 +4,8 @@
 
 package com.palantir.stash.codesearch.search;
 
+import com.atlassian.stash.repository.Repository;
+import com.google.common.collect.Iterators;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -13,12 +15,10 @@ import org.elasticsearch.index.query.*;
 import org.joda.time.ReadableInstant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.atlassian.stash.repository.Repository;
-import com.google.common.collect.Iterators;
 
 import static org.elasticsearch.index.query.FilterBuilders.*;
 
-class SearchFilters {
+public class SearchFilters {
 
     private static final Logger log = LoggerFactory.getLogger(SearchFilters.class);
 
@@ -28,6 +28,20 @@ class SearchFilters {
                 return Iterators.forArray(array);
             }
         };
+    }
+
+    public static FilterBuilder exactRefFilter (String ref) {
+        return termFilter("refs.untouched", ref)
+            .cache(true)
+            .cacheKey("CACHE^EXACTREFFILTER^" + ref);
+    }
+
+    public static FilterBuilder projectRepositoryFilter (String project, String repository) {
+        return andFilter(
+            termFilter("project", project),
+            termFilter("repository", repository))
+            .cache(true)
+            .cacheKey("CACHE^PROJECTREPOFILTER^" + project + "^" + repository);
     }
 
     public static FilterBuilder aclFilter (Map<String, Repository> repoMap) {
@@ -60,11 +74,7 @@ class SearchFilters {
             filter.cache(false);
         }
         for (Repository repo : repoMap.values()) {
-            filter.add(andFilter(
-                termFilter("project", repo.getProject().getKey()),
-                termFilter("repository", repo.getSlug()))
-                .cache(true)
-                .cacheKey("CACHE^ACLFILTER^" + repo.getProject().getKey() + "^" + repo.getSlug()));
+            filter.add(projectRepositoryFilter(repo.getProject().getKey(), repo.getSlug()));
         }
         return filter;
     }
@@ -92,7 +102,7 @@ class SearchFilters {
 
             AndFilterBuilder refFilter = andFilter()
                 .cache(true)
-                .cacheKey("CACHE^REFFILTER^" + ref);
+                .cacheKey("CACHE^REFANDFILTER^" + ref);
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
                     refFilter.add(termFilter("refs", tok.toLowerCase()));
@@ -118,7 +128,7 @@ class SearchFilters {
             }
             filter.add(termFilter("project", project)
                 .cache(true)
-                .cacheKey("CACHE^PROJECT^" + project));
+                .cacheKey("CACHE^PROJECTFILTER^" + project));
             filterAdded = true;
         }
         return filterAdded ? filter : matchAllFilter();
@@ -138,7 +148,7 @@ class SearchFilters {
             }
             filter.add(termFilter("repository", repository)
                 .cache(true)
-                .cacheKey("CACHE^REPOSITORY^" + repository));
+                .cacheKey("CACHE^REPOFILTER^" + repository));
             filterAdded = true;
         }
         return filterAdded ? filter : matchAllFilter();
@@ -167,7 +177,7 @@ class SearchFilters {
             // Name filters
             AndFilterBuilder nameFilter = andFilter()
                 .cache(true)
-                .cacheKey("CACHE^AUTHORNAMEFILTER^" + author);
+                .cacheKey("CACHE^AUTHORNAMEANDFILTER^" + author);
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
                     nameFilter.add(termFilter("commit.authorname", tok.toLowerCase()));
@@ -178,7 +188,7 @@ class SearchFilters {
             // Email filters
             AndFilterBuilder emailFilter = andFilter()
                 .cache(true)
-                .cacheKey("CACHE^AUTHOREMAILFILTER^" + author);
+                .cacheKey("CACHE^AUTHOREMAILANDFILTER^" + author);
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
                     emailFilter.add(termFilter("commit.authoremail", tok.toLowerCase()));

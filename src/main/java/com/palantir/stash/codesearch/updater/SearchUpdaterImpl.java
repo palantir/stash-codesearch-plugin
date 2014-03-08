@@ -1,15 +1,9 @@
 package com.palantir.stash.codesearch.updater;
 
-import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
-import org.elasticsearch.cluster.metadata.AliasMetaData;
-import org.elasticsearch.common.collect.ImmutableOpenMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.atlassian.stash.repository.*;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.util.*;
 import com.atlassian.stash.scm.git.GitScm;
 import com.google.common.collect.ImmutableMap;
+import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -22,8 +16,13 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.security.SecureRandom;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
+import org.elasticsearch.cluster.metadata.AliasMetaData;
+import org.elasticsearch.common.collect.ImmutableOpenMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.*;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
 public class SearchUpdaterImpl implements SearchUpdater {
@@ -33,9 +32,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
 
-    private final RepositoryService repositoryService;
-
-    private final RepositoryMetadataService metadataService;
+    private final RepositoryServiceManager repositoryServiceManager;
 
     private final GitScm gitScm;
 
@@ -65,12 +62,10 @@ public class SearchUpdaterImpl implements SearchUpdater {
     private final ScheduledThreadPoolExecutor jobPool;
 
     public SearchUpdaterImpl (
-            RepositoryService repositoryService,
-            RepositoryMetadataService metadataService,
+            RepositoryServiceManager repositoryServiceManager,
             GitScm gitScm,
             SearchUpdateJobFactory jobFactory) {
-        this.repositoryService = repositoryService;
-        this.metadataService = metadataService;
+        this.repositoryServiceManager = repositoryServiceManager;
         this.gitScm = gitScm;
         this.jobFactory = jobFactory;
         this.random = new SecureRandom();
@@ -124,9 +119,18 @@ public class SearchUpdaterImpl implements SearchUpdater {
                                 .field("index", "not_analyzed")
                             .endObject()
                             .startObject("refs")
-                                .field("type", "string")
-                                .field("index_analyzer", "ref_analyzer")
-                                .field("search_analyzer", "ref_analyzer")
+                                .field("type", "multi_field")
+                                .startObject("fields")
+                                    .startObject("refs")
+                                        .field("type", "string")
+                                        .field("index_analyzer", "ref_analyzer")
+                                        .field("search_analyzer", "ref_analyzer")
+                                    .endObject()
+                                    .startObject("untouched")
+                                        .field("type", "string")
+                                        .field("index", "not_analyzed")
+                                    .endObject()
+                                .endObject()
                             .endObject()
                             .startObject("authorname")
                                 .field("type", "string")
@@ -167,9 +171,18 @@ public class SearchUpdaterImpl implements SearchUpdater {
                                 .field("index", "not_analyzed")
                             .endObject()
                             .startObject("refs")
-                                .field("type", "string")
-                                .field("index_analyzer", "ref_analyzer")
-                                .field("search_analyzer", "ref_analyzer")
+                                .field("type", "multi_field")
+                                .startObject("fields")
+                                    .startObject("refs")
+                                        .field("type", "string")
+                                        .field("index_analyzer", "ref_analyzer")
+                                        .field("search_analyzer", "ref_analyzer")
+                                    .endObject()
+                                    .startObject("untouched")
+                                        .field("type", "string")
+                                        .field("index", "not_analyzed")
+                                    .endObject()
+                                .endObject()
                             .endObject()
                             .startObject("blob")
                                 .field("type", "string")
@@ -309,42 +322,6 @@ public class SearchUpdaterImpl implements SearchUpdater {
         };
     }
 
-    // Returns map of PROJECTKEY^REPOSLUG to repository
-    private ImmutableMap<String, Repository> getRepositoryMap () {
-        PageRequest req = new PageRequestImpl(0, 25);
-        ImmutableMap.Builder<String, Repository> repoMap =
-            new ImmutableMap.Builder<String, Repository>();
-        while (true) {
-            Page<? extends Repository> repoPage = repositoryService.findAll(req);
-            for (Repository r : repoPage.getValues()) {
-                repoMap.put(r.getProject().getKey() + "^" + r.getSlug(), r);
-            }
-            if (repoPage.getIsLastPage()) {
-                break;
-            }
-            req = repoPage.getNextPageRequest();
-        }
-        return repoMap.build();
-    }
-
-    // Returns map of BRANCH_REF to branch
-    private ImmutableMap<String, Branch> getBranchMap (Repository repository) {
-        PageRequest req = new PageRequestImpl(0, 25);
-        ImmutableMap.Builder<String, Branch> branchMap = new ImmutableMap.Builder<String, Branch>();
-        while (true) {
-            Page<? extends Branch> branchPage = metadataService.getBranches(
-                repository, req, null, RefOrder.ALPHABETICAL);
-            for (Branch b : branchPage.getValues()) {
-                branchMap.put(b.getId(), b);
-            }
-            if (branchPage.getIsLastPage()) {
-                break;
-            }
-            req = branchPage.getNextPageRequest();
-        }
-        return branchMap.build();
-    }
-
     // Returns a dummy finished Future object
     private Future getFinishedFuture () {
         return new Future() {
@@ -356,14 +333,9 @@ public class SearchUpdaterImpl implements SearchUpdater {
         };
     }
 
-    private Future submitAsyncUpdateImpl (Repository repository, String branchRef,
+    private Future submitAsyncUpdateImpl (Repository repository, String ref,
             int delayMs, boolean reindex) {
-        Branch branch = getBranchMap(repository).get(branchRef);
-        if (branch == null) {
-            log.error("ref {} does not exist, aborting", branchRef);
-            return getFinishedFuture();
-        }
-        SearchUpdateJob job = jobFactory.newDefaultJob(repository, branch);
+        SearchUpdateJob job = jobFactory.newDefaultJob(repository, ref);
         Runnable jobRunnable = getJobRunnable(job, reindex);
         return jobPool.schedule(jobRunnable, delayMs, TimeUnit.MILLISECONDS);
     }
@@ -385,19 +357,19 @@ public class SearchUpdaterImpl implements SearchUpdater {
         }
     }
 
-    private void submitUpdateImpl (Repository repository, String branchRef, int delayMs,
+    private void submitUpdateImpl (Repository repository, String ref, int delayMs,
             boolean reindex) {
-        waitForFuture(submitAsyncUpdateImpl(repository, branchRef, delayMs, reindex));
+        waitForFuture(submitAsyncUpdateImpl(repository, ref, delayMs, reindex));
     }
 
     @Override
-    public Future submitAsyncUpdate (Repository repository, String branchRef, int delayMs) {
-        return submitAsyncUpdateImpl(repository, branchRef, delayMs, false);
+    public Future submitAsyncUpdate (Repository repository, String ref, int delayMs) {
+        return submitAsyncUpdateImpl(repository, ref, delayMs, false);
     }
 
     @Override
-    public Future submitAsyncReindex (Repository repository, String branchRef, int delayMs) {
-        return submitAsyncUpdateImpl(repository, branchRef, delayMs, true);
+    public Future submitAsyncReindex (Repository repository, String ref, int delayMs) {
+        return submitAsyncUpdateImpl(repository, ref, delayMs, true);
     }
 
     @Override
@@ -411,13 +383,13 @@ public class SearchUpdaterImpl implements SearchUpdater {
     }
 
     @Override
-    public void submitUpdate (Repository repository, String branchRef, int delayMs) {
-        submitUpdateImpl(repository, branchRef, delayMs, false);
+    public void submitUpdate (Repository repository, String ref, int delayMs) {
+        submitUpdateImpl(repository, ref, delayMs, false);
     }
 
     @Override
-    public void submitReindex (Repository repository, String branchRef, int delayMs) {
-        submitUpdateImpl(repository, branchRef, delayMs, true);
+    public void submitReindex (Repository repository, String ref, int delayMs) {
+        submitUpdateImpl(repository, ref, delayMs, true);
     }
 
     @Override
@@ -428,8 +400,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
         try {
             initializeAliasedIndex(ES_UPDATEALIAS, true);
             List<Future> futures = new ArrayList<Future>();
-            for (Repository repo : getRepositoryMap().values()) {
-                for (Branch branch : getBranchMap(repo).values()) {
+            for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
+                for (Branch branch : repositoryServiceManager.getBranchMap(repo).values()) {
                     futures.add(submitAsyncReindex(repo, branch.getId(), 0));
                 }
             }
