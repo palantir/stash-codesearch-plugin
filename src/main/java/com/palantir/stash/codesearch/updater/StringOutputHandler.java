@@ -4,13 +4,13 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.atlassian.stash.scm.*;
 import com.atlassian.utils.process.*;
 import com.atlassian.stash.io.*;
 import java.io.IOException;
 import java.io.InputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class StringOutputHandler extends LineReaderOutputHandler implements CommandOutputHandler<String> {
 

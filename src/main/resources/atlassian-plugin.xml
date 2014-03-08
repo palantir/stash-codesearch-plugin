@@ -8,13 +8,24 @@
         <vendor name="${project.organization.name}" url="${project.organization.url}"/>
     </plugin-info>
 
+    <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
+    <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
+    <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
+
+    <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
+        <directory location="/templates/"/>
+        <dependency>com.atlassian.stash.stash-web-plugin:global</dependency>
+    </stash-resource>
+
     <web-resource key="scs-resources" name="SCS Resources">
         <resource type="download" name="style.css" location="/static/style.css"/>
         <resource type="download" name="idea-syntax.css" location="/static/idea-syntax.css"/>
         <resource type="download" name="syntax-highlight.js" location="/static/highlight.pack.js"/>
     </web-resource>
 
-    <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
+    <component key="repository-service-manager" class="com.palantir.stash.codesearch.manager.RepositoryServiceManagerImpl" public="true">
+        <interface>com.palantir.stash.codesearch.manager.RepositoryServiceManager</interface>
+    </component>
 
     <component key="search-update-job-factory" class="com.palantir.stash.codesearch.updater.SearchUpdateJobFactoryImpl" public="true">
         <interface>com.palantir.stash.codesearch.updater.SearchUpdateJobFactory</interface>
@@ -23,14 +34,6 @@
     <component key="search-updater" class="com.palantir.stash.codesearch.updater.SearchUpdaterImpl" public="true">
         <interface>com.palantir.stash.codesearch.updater.SearchUpdater</interface>
     </component>
-
-    <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
-        <directory location="/templates/"/>
-        <dependency>com.atlassian.stash.stash-web-plugin:global</dependency>
-    </stash-resource>
-
-    <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
-    <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
 
     <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
         <description key="search-servlet.description">Codesearch Servlet</description>

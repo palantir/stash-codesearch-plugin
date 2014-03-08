@@ -5,12 +5,12 @@
 
 package com.palantir.stash.codesearch.search;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.regex.*;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.search.highlight.*;
-import com.google.common.collect.ImmutableSet;
 
 class SourceSearch {
 

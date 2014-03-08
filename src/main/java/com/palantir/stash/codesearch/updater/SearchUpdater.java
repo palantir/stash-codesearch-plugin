@@ -15,13 +15,13 @@ public interface SearchUpdater {
      * Submits a repository and branch to be asynchronously updated after a delay of at least
      * delayMs.
      */
-    Future submitAsyncUpdate (Repository repository, String branchRef, int delayMs);
+    Future submitAsyncUpdate (Repository repository, String ref, int delayMs);
 
     /**
      * Submits a repository and branch to be asynchronously reindexed after a delay of at least
      * delayMs.
      */
-    Future submitAsyncReindex (Repository repository, String branchRef, int delayMs);
+    Future submitAsyncReindex (Repository repository, String ref, int delayMs);
 
     /**
      * Triggers a full reindex of all branches. Implementations should perform aliasing to ensure
@@ -33,13 +33,13 @@ public interface SearchUpdater {
      * Submits a repository and branch to be updated after a delay of at least delayMs. Blocks
      * until the update job has completed.
      */
-    void submitUpdate (Repository repository, String branchRef, int delayMs);
+    void submitUpdate (Repository repository, String ref, int delayMs);
 
     /**
      * Submits a repository and branch to be reindexed after a delay of at least delayMs. Blocks
      * until the reindex job has completed.
      */
-    void submitReindex (Repository repository, String branchRef, int delayMs);
+    void submitReindex (Repository repository, String ref, int delayMs);
 
     /**
      * Triggers a full reindex of all branches. Implementations should perform ailasing to ensure

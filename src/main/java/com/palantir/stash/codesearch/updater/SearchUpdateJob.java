@@ -4,7 +4,6 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.repository.Branch;
 import com.atlassian.stash.repository.Repository;
 import com.atlassian.stash.scm.git.GitScm;
 
@@ -16,9 +15,9 @@ public interface SearchUpdateJob {
     Repository getRepository ();
 
     /**
-     * Returns this job's branch.
+     * Returns this job's ref.
      */
-    Branch getBranch ();
+    String getRef ();
 
     /**
      * Executes an incremental update with the specified SCM manager.

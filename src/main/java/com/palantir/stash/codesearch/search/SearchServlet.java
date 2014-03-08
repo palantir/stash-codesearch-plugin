@@ -1,5 +1,20 @@
 package com.palantir.stash.codesearch.search;
 
+import com.atlassian.plugin.webresource.WebResourceManager;
+import com.atlassian.soy.renderer.SoyTemplateRenderer;
+import com.atlassian.stash.server.ApplicationPropertiesService;
+import com.atlassian.stash.user.*;
+import com.atlassian.stash.repository.*;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
+import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import javax.servlet.*;
+import javax.servlet.http.*;
 import org.apache.commons.io.FilenameUtils;
 import org.elasticsearch.action.search.*;
 import org.elasticsearch.common.unit.TimeValue;
@@ -11,29 +26,11 @@ import org.joda.time.*;
 import org.joda.time.format.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import javax.servlet.*;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import com.atlassian.plugin.webresource.WebResourceManager;
-import com.atlassian.soy.renderer.SoyTemplateRenderer;
-import com.atlassian.stash.exception.*;
-import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.util.*;
-import com.atlassian.stash.repository.*;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 import static org.elasticsearch.common.xcontent.XContentFactory.*;
 import static org.elasticsearch.index.query.FilterBuilders.*;
 import static org.elasticsearch.index.query.QueryBuilders.*;
-import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
 public class SearchServlet extends HttpServlet {
 
@@ -46,7 +43,7 @@ public class SearchServlet extends HttpServlet {
         "exe"
     );
 
-    // TODO: de-magic-numberify these constants
+    // TODO: de-magic-numberify these values
 
     private static final int PREVIEW_LINES = 10;
 
@@ -70,7 +67,7 @@ public class SearchServlet extends HttpServlet {
 
     private static final DateTimeFormatter TIME_PRINTER = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm");
 
-    private final RepositoryService repositoryService;
+    private final RepositoryServiceManager repositoryServiceManager;
 
     private final PermissionValidationService validationService;
 
@@ -83,13 +80,13 @@ public class SearchServlet extends HttpServlet {
     private final WebResourceManager resourceManager;
 
     public SearchServlet (
-            RepositoryService repositoryService,
+            RepositoryServiceManager repositoryServiceManager,
             PermissionValidationService validationService,
             SoyTemplateRenderer soyTemplateRenderer,
             StashAuthenticationContext authenticationContext,
             ApplicationPropertiesService propertiesService,
             WebResourceManager resourceManager) {
-        this.repositoryService = repositoryService;
+        this.repositoryServiceManager = repositoryServiceManager;
         this.validationService = validationService;
         this.soyTemplateRenderer = soyTemplateRenderer;
         this.authenticationContext = authenticationContext;
@@ -115,29 +112,6 @@ public class SearchServlet extends HttpServlet {
         } catch (Exception e) {
             return "";
         }
-    }
-
-    // Returns map of PROJECTKEY^REPOSLUG to repository for the logged in user
-    private ImmutableMap<String, Repository> getRepositoryMap () {
-        PageRequest req = new PageRequestImpl(0, 250);
-        ImmutableMap.Builder<String, Repository> repoMap =
-            new ImmutableMap.Builder<String, Repository>();
-        while (true) {
-            Page<? extends Repository> repoPage = repositoryService.findAll(req);
-            for (Repository r : repoPage.getValues()) {
-                try {
-                    validationService.validateForRepository(r, Permission.REPO_READ);
-                    repoMap.put(r.getProject().getKey() + "^" + r.getSlug(), r);
-                } catch (AuthorisationException e) {
-                    // User doesn't have permission to access the repo
-                }
-            }
-            if (repoPage.getIsLastPage()) {
-                break;
-            }
-            req = repoPage.getNextPageRequest();
-        }
-        return repoMap.build();
     }
 
     // Returns map view of search hits for soy templates
@@ -243,7 +217,8 @@ public class SearchServlet extends HttpServlet {
         ArrayList<ImmutableMap<String, Object>> hitArray =
             new ArrayList<ImmutableMap<String, Object>>(currentHits.length);
         if (params.doSearch) {
-            ImmutableMap<String, Repository> repoMap = getRepositoryMap();
+            ImmutableMap<String, Repository> repoMap = repositoryServiceManager.getRepositoryMap(
+                validationService);
             if (repoMap.isEmpty()) {
                 error = "You do not have permissions to access any repositories";
             }
