@@ -1,3 +1,7 @@
+/**
+ * Servlet for the main search application.
+ */
+
 package com.palantir.stash.codesearch.search;
 
 import com.atlassian.plugin.webresource.WebResourceManager;

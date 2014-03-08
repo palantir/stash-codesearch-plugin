@@ -100,6 +100,12 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>com.atlassian.activeobjects</groupId>
+            <artifactId>activeobjects-plugin</artifactId>
+            <version>${ao.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <scope>provided</scope>
@@ -141,5 +147,6 @@
         <stash.version>2.9.4</stash.version>
         <stash.data.version>2.9.4</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
+        <ao.version>0.21.2</ao.version>
     </properties>
 </project>

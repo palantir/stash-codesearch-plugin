@@ -11,6 +11,7 @@
     <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
     <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
     <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
+    <component-import key="activeObjects" interface="com.atlassian.activeobjects.external.ActiveObjects"/>
 
     <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
         <directory location="/templates/"/>
@@ -22,6 +23,11 @@
         <resource type="download" name="idea-syntax.css" location="/static/idea-syntax.css"/>
         <resource type="download" name="syntax-highlight.js" location="/static/highlight.pack.js"/>
     </web-resource>
+
+    <ao key="ao-module">
+        <description>Stash Codesearch settings DB</description>
+        <entity>com.palantir.stash.codesearch.admin.GlobalSettings</entity>
+    </ao>
 
     <component key="repository-service-manager" class="com.palantir.stash.codesearch.manager.RepositoryServiceManagerImpl" public="true">
         <interface>com.palantir.stash.codesearch.manager.RepositoryServiceManager</interface>
@@ -35,11 +41,6 @@
         <interface>com.palantir.stash.codesearch.updater.SearchUpdater</interface>
     </component>
 
-    <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
-        <description key="search-servlet.description">Codesearch Servlet</description>
-        <url-pattern>/codesearch</url-pattern>
-    </servlet>
-
     <post-receive-hook name="Search Updater Hook (post-receive)" key="post-receive-updater-hook" class="com.palantir.stash.codesearch.hook.PostReceiveUpdaterHook">
         <description key="post-receive-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on pushes.</description>
     </post-receive-hook>
@@ -47,5 +48,31 @@
     <merge-check name="Search Updater Hook (merge)" key="merge-updater-hook" class="com.palantir.stash.codesearch.hook.MergeUpdaterHook">
         <description key="merge-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on merges.</description>
     </merge-check>
+
+    <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
+        <description key="search-servlet.description">Codesearch Servlet</description>
+        <url-pattern>/codesearch/search</url-pattern>
+    </servlet>
+
+    <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
+        <label>Codesearch</label>
+        <link>/plugins/servlet/codesearch/search</link>
+    </web-item>
+
+    <web-item key="search-servlet-projectpage-link" name="Codesearch" section="stash.project.overview.actions" weight="200">
+        <label>Search Project</label>
+        <link>/plugins/servlet/codesearch/search?projectKeys=${project.key}</link>
+    </web-item>
+
+    <web-item key="search-servlet-repopage-link" name="Codesearch" section="stash.web.repository.header.buttons" weight="200">
+        <label>Search Repository</label>
+        <link>/plugins/servlet/codesearch/search?projectKeys=${repository.project.key}&amp;repoNames=${repository.slug}</link>
+    </web-item>
+
+    <web-item key="search-servlet-global-settings" name="Codesearch Global Settings" section="atl.admin/admin-settings-section" weight="200">
+        <label>Codesearch Global Settings</label>
+        <link linkId="search-servlet-global-settings-link">/plugins/servlet/codesearch/globalsettings</link>
+        <tooltip>Configuration options for Stash Codesearch instance.</tooltip>
+    </web-item>
 
 </atlassian-plugin>
