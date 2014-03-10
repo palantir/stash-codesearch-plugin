@@ -1,2 +1,5 @@
 cluster.name: stash-codesearch
 node.name: stash-codesearch-clientnode
+discovery.zen.ping.multicast.enabled: false
+discovery.zen.ping.unicast.hosts: localhost[9300-9400]
+http.enabled: false
