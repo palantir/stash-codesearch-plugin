@@ -2,7 +2,7 @@
  * Interface for manipulating RepositoryService and RepositoryMetadataService.
  */
 
-package com.palantir.stash.codesearch.manager;
+package com.palantir.stash.codesearch.repository;
 
 import com.atlassian.stash.repository.*;
 import com.atlassian.stash.user.PermissionValidationService;

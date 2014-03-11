@@ -6,7 +6,7 @@ package com.palantir.stash.codesearch.hook;
 
 import com.atlassian.stash.pull.PullRequestRef;
 import com.atlassian.stash.scm.pull.*;
-import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 
 public class MergeUpdaterHook implements MergeRequestCheck {
@@ -17,14 +17,14 @@ public class MergeUpdaterHook implements MergeRequestCheck {
      */
     private static final int MERGE_UPDATE_DELAY = 20000; // milliseconds
 
-    private final SearchUpdater updater;
-
     private final RepositoryServiceManager repositoryServiceManager;
 
+    private final SearchUpdater updater;
+
     public MergeUpdaterHook (
-            SearchUpdater updater, RepositoryServiceManager repositoryServiceManager) {
-        this.updater = updater;
+            RepositoryServiceManager repositoryServiceManager, SearchUpdater updater) {
         this.repositoryServiceManager = repositoryServiceManager;
+        this.updater = updater;
     }
 
     @Override

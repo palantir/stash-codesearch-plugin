@@ -29,8 +29,12 @@
         <entity>com.palantir.stash.codesearch.admin.GlobalSettings</entity>
     </ao>
 
-    <component key="repository-service-manager" class="com.palantir.stash.codesearch.manager.RepositoryServiceManagerImpl" public="true">
-        <interface>com.palantir.stash.codesearch.manager.RepositoryServiceManager</interface>
+    <component key="global-settings-manager" class="com.palantir.stash.codesearch.admin.GlobalSettingsManagerImpl" public="true">
+        <interface>com.palantir.stash.codesearch.admin.GlobalSettingsManager</interface>
+    </component>
+
+    <component key="repository-service-manager" class="com.palantir.stash.codesearch.repository.RepositoryServiceManagerImpl" public="true">
+        <interface>com.palantir.stash.codesearch.repository.RepositoryServiceManager</interface>
     </component>
 
     <component key="search-update-job-factory" class="com.palantir.stash.codesearch.updater.SearchUpdateJobFactoryImpl" public="true">
@@ -48,11 +52,6 @@
     <merge-check name="Search Updater Hook (merge)" key="merge-updater-hook" class="com.palantir.stash.codesearch.hook.MergeUpdaterHook">
         <description key="merge-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on merges.</description>
     </merge-check>
-
-    <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
-        <description key="search-servlet.description">Codesearch Servlet</description>
-        <url-pattern>/codesearch/search</url-pattern>
-    </servlet>
 
     <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
         <label>Codesearch</label>
@@ -74,5 +73,15 @@
         <link linkId="search-servlet-global-settings-link">/plugins/servlet/codesearch/globalsettings</link>
         <tooltip>Configuration options for Stash Codesearch instance.</tooltip>
     </web-item>
+
+    <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
+        <description key="search-servlet.description">Codesearch Servlet</description>
+        <url-pattern>/codesearch/search</url-pattern>
+    </servlet>
+
+    <servlet key="global-settings-servlet" class="com.palantir.stash.codesearch.admin.GlobalSettingsServlet">
+        <description key="global-settings-servlet.description">Codesearch Global Settings Servlet</description>
+        <url-pattern>/codesearch/globalsettings</url-pattern>
+    </servlet>
 
 </atlassian-plugin>

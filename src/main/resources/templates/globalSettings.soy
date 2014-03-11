@@ -1,0 +1,145 @@
+{namespace plugin.page.codesearch}
+
+/**
+ * Global settings page template
+ * @param settings
+ * @param errors
+ */
+{template .globalSettings}
+
+
+<html>
+<meta name="decorator" content="atl.admin">
+<head>
+    <title>Stash Codesearch Global Settings</title>
+</head>
+<body>
+
+{call aui.group.group}
+    {param content}
+        {call aui.group.item}
+            {param content}
+                <h2>Codesearch Global Settings</h2>
+            {/param}
+        {/call}
+    {/param}
+{/call}
+
+{if $errors.0}
+    {call widget.aui.message.error}
+        {param content}
+            <ul>
+            {foreach $error in $errors}
+                <li>{$error}</li>
+            {/foreach}
+            </ul>
+        {/param}
+    {/call}
+{/if}
+ 
+{call aui.group.group} {param content} {call aui.form.form}
+    {param action: '' /}
+    {param content}
+        {call aui.form.checkboxField}
+            {param legendContent: 'Indexing' /}
+            {param fields: [[
+                'id': 'indexingEnabled',
+                'labelText': 'Enabled',
+                'isChecked': $settings.indexingEnabled
+                ]] /}
+            {param descriptionText: 'Check this box to enable indexing of new source code & commits' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'maxFileSize' /}
+            {param labelContent: 'Max Filesize' /}
+            {param value: $settings.maxFileSize /}
+            {param descriptionText: 'Maximum size (in bytes) of source code files to index' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'searchTimeout' /}
+            {param labelContent: 'Search Timeout' /}
+            {param value: $settings.searchTimeout /}
+            {param descriptionText: 'Timeout (in ms) of all search requests' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'noHighlightExtensions' /}
+            {param labelContent: 'Unhighlighted Extensions' /}
+            {param value: $settings.noHighlightExtensions /}
+            {param descriptionText: 'Comma-separated list of file extensions to exclude from syntax highlighting' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'maxPreviewLines' /}
+            {param labelContent: 'Preview Limit' /}
+            {param value: $settings.maxPreviewLines /}
+            {param descriptionText: 'Maximum number of lines to display for file previews' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'maxMatchLines' /}
+            {param labelContent: 'Match Limit' /}
+            {param value: $settings.maxMatchLines /}
+            {param descriptionText: 'Maximum number of lines to display for file matches' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'maxFragments' /}
+            {param labelContent: 'Fragment Limit' /}
+            {param value: $settings.maxFragments/}
+            {param descriptionText: 'Maximum number of match fragments to display for file matches' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'pageSize' /}
+            {param labelContent: 'Page Size' /}
+            {param value: $settings.pageSize /}
+            {param descriptionText: 'Number of results to display per page' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'commitHashBoost' /}
+            {param labelContent: 'Commit Hash Boost' /}
+            {param value: $settings.commitHashBoost /}
+            {param descriptionText: 'Boosting factor of results with matching commit hashes (relative to source code matches)' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'commitSubjectBoost' /}
+            {param labelContent: 'Commit Subject Boost' /}
+            {param value: $settings.commitSubjectBoost /}
+            {param descriptionText: 'Boosting factor of results with matching commit subjects' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'commitBodyBoost' /}
+            {param labelContent: 'Commit Body Boost' /}
+            {param value: $settings.commitBodyBoost /}
+            {param descriptionText: 'Boosting factor of results with matching commit message bodies' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'fileNameBoost' /}
+            {param labelContent: 'Filename Boost' /}
+            {param value: $settings.fileNameBoost/}
+            {param descriptionText: 'Boosting factor of results with matching file names' /}
+        {/call}
+        {call aui.form.buttons}
+            {param content}
+                {call aui.form.submit}
+                    {param id: 'saveButton' /}
+                    {param text: 'Save' /}
+                    {param type: 'submit' /}
+                {/call}
+                {call aui.form.submit}
+                    {param id: 'saveAndReindexButton' /}
+                    {param text: 'Save and Reindex' /}
+                    {param type: 'submit' /}
+                {/call}
+                <input type="hidden" name="reindex" id="reindexHidden" value="false">
+            {/param}
+        {/call}
+    {/param}
+{/call} {/param} {/call}
+
+{literal}<script>
+AJS.$('#search-servlet-global-settings-link').parent().addClass('aui-nav-selected')
+AJS.$('#saveAndReindexButton').click(function (event) {
+    AJS.$('#reindexHidden').val('true');
+})
+</script>{/literal}
+
+</body>
+</html>
+{/template}

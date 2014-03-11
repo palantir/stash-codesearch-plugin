@@ -2,15 +2,19 @@
  * Default implementation of RepositoryServiceManager.
  */
 
-package com.palantir.stash.codesearch.manager;
+package com.palantir.stash.codesearch.repository;
 
 import com.atlassian.stash.exception.AuthorisationException;
 import com.atlassian.stash.repository.*;
 import com.atlassian.stash.user.*;
 import com.atlassian.stash.util.*;
 import com.google.common.collect.ImmutableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
+
+    private static final Logger log = LoggerFactory.getLogger(RepositoryServiceManagerImpl.class);
 
     private static final int PAGE_SIZE = 1000;
 
@@ -25,6 +29,7 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
         this.repositoryMetadataService = repositoryMetadataService;
     }
 
+    @Override
     public ImmutableMap<String, Repository> getRepositoryMap (
             PermissionValidationService validationService) {
         PageRequest req = new PageRequestImpl(0, PAGE_SIZE);
@@ -50,6 +55,7 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
         return repoMap.build();
     }
 
+    @Override
     public ImmutableMap<String, Branch> getBranchMap (Repository repository) {
         PageRequest req = new PageRequestImpl(0, PAGE_SIZE);
         ImmutableMap.Builder<String, Branch> branchMap = new ImmutableMap.Builder<String, Branch>();
@@ -65,7 +71,6 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
             req = branchPage.getNextPageRequest();
         }
         return branchMap.build();
- 
     }
 
 }

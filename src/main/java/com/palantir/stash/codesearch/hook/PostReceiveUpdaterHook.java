@@ -6,20 +6,20 @@ package com.palantir.stash.codesearch.hook;
 
 import com.atlassian.stash.hook.*;
 import com.atlassian.stash.repository.*;
-import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 import java.util.Collection;
 
 public class PostReceiveUpdaterHook implements PostReceiveHook {
 
-    private final SearchUpdater updater;
-
     private final RepositoryServiceManager repositoryServiceManager;
 
+    private final SearchUpdater updater;
+
     public PostReceiveUpdaterHook (
-            SearchUpdater updater, RepositoryServiceManager repositoryServiceManager) {
-        this.updater = updater;
+            RepositoryServiceManager repositoryServiceManager, SearchUpdater updater) {
         this.repositoryServiceManager = repositoryServiceManager;
+        this.updater = updater;
     }
 
     @Override
