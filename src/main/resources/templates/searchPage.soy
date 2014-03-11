@@ -7,7 +7,7 @@
  * @param pages
  * @param currentPage
  * @param fullUri
- * @param uriPrefix
+ * @param baseUrl
  * @param totalHits
  * @param resultFrom
  * @param resultTo
@@ -18,14 +18,10 @@
 {template .searchPage}
 
 <html>
-
 <meta name="decorator" content="atl.general">
-
 <head>
     <title>Stash Codesearch</title>
 </head>
-
-<body>
 
 {literal}
 <script>
@@ -33,6 +29,8 @@
     hljs.initHighlightingOnLoad();
 </script>
 {/literal}
+
+<body>
 
 <div class="page-container">
 
@@ -69,7 +67,7 @@
             <div class="description">Comma-separated</div>
         </div>
         <div class="field-group">
-            <label for="repoNames">Repository names</label>
+            <label for="repoNames">Repository names (slugs)</label>
             <input class="text medium-field" type="text" name="repoNames" id="repoNames" placeholder="Default: any repo" {if $prevParams.repoNames}value="{$prevParams.repoNames}"{/if}>
             <div class="description">Comma-separated</div>
         </div>
@@ -118,11 +116,11 @@
 
     // Show repo, project, and refs
     <span class="result-header">
-        <a href="{$uriPrefix}/projects/{$hit.project}">{$hit.projectname} </a>/
-        <a href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}"> {$hit.repositoryname}</a>
+        <a href="{$baseUrl}/projects/{$hit.project}">{$hit.projectname} </a>/
+        <a href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}"> {$hit.repositoryname}</a>
         &nbsp;&nbsp;[
         {foreach $ref in $hit.refs}
-            &nbsp;<a class="ref-link" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/browse?at={$ref}">{$ref}</a>&nbsp;
+            &nbsp;<a class="ref-link" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse?at={$ref}">{$ref}</a>&nbsp;
         {/foreach}
         ]
     </span>
@@ -130,9 +128,9 @@
     // Show title (hash or path)
     <h3 class="result-title">
     {if $iscommit}
-        Commit <b><a class="commit-hash" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/commits/{$hit.hash}">{$hit.hash}</a></b>
+        Commit <b><a class="commit-hash" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/commits/{$hit.hash}">{$hit.hash}</a></b>
     {elseif $isfile}
-        File <b><a class="file-name" href="{$uriPrefix}/projects/{$hit.project}/repos/{$hit.repository}/browse/{$hit.path}?at={$hit.primaryRef}">{$hit.path}</a></b>
+        File <b><a class="file-name" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse/{$hit.path}?at={$hit.primaryRef}">{$hit.path}</a></b>
     {/if}
     </h3>
 
@@ -187,6 +185,7 @@
 <div class="no-results">No results. {$error}</div>
 {/if}
 
+</div>
 </body>
 </html>
 {/template}

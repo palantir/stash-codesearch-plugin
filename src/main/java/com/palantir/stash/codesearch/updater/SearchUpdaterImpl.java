@@ -3,7 +3,9 @@ package com.palantir.stash.codesearch.updater;
 import com.atlassian.stash.repository.*;
 import com.atlassian.stash.scm.git.GitScm;
 import com.google.common.collect.ImmutableMap;
-import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
+import com.palantir.stash.codesearch.admin.GlobalSettings;
+import com.palantir.stash.codesearch.admin.GlobalSettingsManager;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -27,14 +29,15 @@ import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
 public class SearchUpdaterImpl implements SearchUpdater {
 
-    // TODO: make this configurable (figure out atlassian plugin settings)
     private static final int MAX_CONCURRENT_INDEX_JOBS = 4;
 
     private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
 
-    private final RepositoryServiceManager repositoryServiceManager;
-
     private final GitScm gitScm;
+
+    private final GlobalSettingsManager globalSettingsManager;
+
+    private final RepositoryServiceManager repositoryServiceManager;
 
     private final SearchUpdateJobFactory jobFactory;
 
@@ -50,6 +53,9 @@ public class SearchUpdaterImpl implements SearchUpdater {
      */
     private final AtomicBoolean isReindexingAll;
 
+    // Between a reindex and alias switching, we need to block all new index requests.
+    private final AtomicBoolean jobPoolBlocked;
+
     /**
      * Why do we use both a semaphore and a thread pool to control execution? Since each indexing
      * job must be locked on its corresponding branch, there could be a bunch of jobs "executing"
@@ -62,15 +68,18 @@ public class SearchUpdaterImpl implements SearchUpdater {
     private final ScheduledThreadPoolExecutor jobPool;
 
     public SearchUpdaterImpl (
-            RepositoryServiceManager repositoryServiceManager,
             GitScm gitScm,
+            GlobalSettingsManager globalSettingsManager,
+            RepositoryServiceManager repositoryServiceManager,
             SearchUpdateJobFactory jobFactory) {
-        this.repositoryServiceManager = repositoryServiceManager;
         this.gitScm = gitScm;
+        this.globalSettingsManager = globalSettingsManager;
+        this.repositoryServiceManager = repositoryServiceManager;
         this.jobFactory = jobFactory;
         this.random = new SecureRandom();
         this.runningJobs = new HashSet<SearchUpdateJob>();
         this.isReindexingAll = new AtomicBoolean(false);
+        this.jobPoolBlocked = new AtomicBoolean(false);
         this.semaphore = new Semaphore(MAX_CONCURRENT_INDEX_JOBS, true);
         this.jobPool = new ScheduledThreadPoolExecutor(MAX_CONCURRENT_INDEX_JOBS * 4);
         initializeAliasedIndex(ES_UPDATEALIAS, false);
@@ -102,7 +111,6 @@ public class SearchUpdaterImpl implements SearchUpdater {
             return false;
         }
 
-        // Generate new index -- TODO: mappings & analyzers
         String newIndex = random.nextLong() + "-" + System.nanoTime();
         try {
             ES_CLIENT.admin().indices().prepareCreate(newIndex)
@@ -306,13 +314,19 @@ public class SearchUpdaterImpl implements SearchUpdater {
             public void run () {
                 acquireLock(job);
                 semaphore.acquireUninterruptibly();
+                final GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+                if (!globalSettings.getIndexingEnabled()) {
+                    log.warn("Not executing SearchUpdateJob {} since indexing is disabled",
+                        job.toString());
+                    return;
+                }
                 try {
                     if (reindex) {
-                        job.doReindex(gitScm);
+                        job.doReindex(gitScm, globalSettings);
                     } else {
-                        job.doUpdate(gitScm);
+                        job.doUpdate(gitScm, globalSettings);
                     }
-                } catch (Throwable e) {
+               } catch (Throwable e) {
                     log.error("Unexpected error while updating index for {}", job.toString(), e);
                 } finally {
                     releaseLock(job);
@@ -335,6 +349,11 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     private Future submitAsyncUpdateImpl (Repository repository, String ref,
             int delayMs, boolean reindex) {
+        if (jobPoolBlocked.get()) {
+            log.warn("Job pool is currently blocked: not executing update job on {}/{}:{}",
+                repository.getProject().getKey(), repository.getSlug(), ref);
+            return getFinishedFuture();
+        }
         SearchUpdateJob job = jobFactory.newDefaultJob(repository, ref);
         Runnable jobRunnable = getJobRunnable(job, reindex);
         return jobPool.schedule(jobRunnable, delayMs, TimeUnit.MILLISECONDS);
@@ -373,16 +392,6 @@ public class SearchUpdaterImpl implements SearchUpdater {
     }
 
     @Override
-    public Future<Boolean> reindexAllAsync (int delayMs) {
-        return jobPool.schedule(new Callable<Boolean>() {
-            @Override
-            public Boolean call () {
-                return reindexAll();
-            }
-        }, delayMs, TimeUnit.MILLISECONDS);
-    }
-
-    @Override
     public void submitUpdate (Repository repository, String ref, int delayMs) {
         submitUpdateImpl(repository, ref, delayMs, false);
     }
@@ -394,11 +403,38 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     @Override
     public boolean reindexAll () {
+        GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+        if (!globalSettings.getIndexingEnabled()) {
+            log.warn("Not performing a complete reindex triggered since indexing is disabled");
+            return false;
+        }
         if (!isReindexingAll.compareAndSet(false, true)) {
+            log.warn("Not performing a complete reindex since one is already occurring");
             return false;
         }
         try {
-            initializeAliasedIndex(ES_UPDATEALIAS, true);
+            // Wait for job pool to clear out
+            jobPoolBlocked.set(true);
+            try {
+                int zeroJobIntervals = 0;
+                while (zeroJobIntervals < 5) {
+                    if (jobPool.getCompletedTaskCount() >= jobPool.getTaskCount()) {
+                        ++zeroJobIntervals;
+                    } else {
+                        zeroJobIntervals = 0;
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        log.warn("Caught error while trying to sleep", e);
+                    }
+                }
+                initializeAliasedIndex(ES_UPDATEALIAS, true);
+            } finally {
+                jobPoolBlocked.set(false);
+            }
+
+            // Submit and wait for each job
             List<Future> futures = new ArrayList<Future>();
             for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
                 for (Branch branch : repositoryServiceManager.getBranchMap(repo).values()) {
@@ -408,6 +444,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
             for (Future future : futures) {
                 waitForFuture(future);
             }
+
             redirectAndDeleteAliasedIndex(ES_SEARCHALIAS, ES_UPDATEALIAS);
         } finally {
             isReindexingAll.getAndSet(false);

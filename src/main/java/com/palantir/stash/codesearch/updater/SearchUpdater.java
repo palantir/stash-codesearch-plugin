@@ -24,12 +24,6 @@ public interface SearchUpdater {
     Future submitAsyncReindex (Repository repository, String ref, int delayMs);
 
     /**
-     * Triggers a full reindex of all branches. Implementations should perform aliasing to ensure
-     * availability during the reindex. The evaluated future returns the result of reindexAll().
-     */
-    Future<Boolean> reindexAllAsync (int delayMs);
-
-    /**
      * Submits a repository and branch to be updated after a delay of at least delayMs. Blocks
      * until the update job has completed.
      */

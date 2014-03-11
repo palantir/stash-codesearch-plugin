@@ -1,15 +1,23 @@
+/**
+ * Servlet for the main search application.
+ */
+
 package com.palantir.stash.codesearch.search;
 
 import com.atlassian.plugin.webresource.WebResourceManager;
 import com.atlassian.soy.renderer.SoyTemplateRenderer;
+import com.atlassian.stash.exception.AuthorisationException;
 import com.atlassian.stash.server.ApplicationPropertiesService;
 import com.atlassian.stash.user.*;
 import com.atlassian.stash.repository.*;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
-import com.palantir.stash.codesearch.manager.RepositoryServiceManager;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
+import com.palantir.stash.codesearch.admin.GlobalSettings;
+import com.palantir.stash.codesearch.admin.GlobalSettingsManager;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,61 +44,36 @@ public class SearchServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(SearchServlet.class);
 
-    private static final TimeValue SEARCH_TIMEOUT = new TimeValue(10000);
-
-    private static final ImmutableSet<String> NO_HIGHLIGHT = ImmutableSet.of(
-        "txt",
-        "exe"
-    );
-
-    // TODO: de-magic-numberify these values
-
-    private static final int PREVIEW_LINES = 10;
-
-    private static final int MAX_MATCH_LINES = 50;
-
-    private static final int PAGE_SIZE = 50;
-
-    private static final int MAX_FRAGMENTS = 50;
-
-    private static final float COMMIT_SUBJECT_BOOST = 4.0F;
-
-    private static final float COMMIT_BODY_BOOST = 2.0F;
-
-    private static final float COMMIT_HASH_BOOST = 50.0F;
-
-    private static final float FILE_PATH_BOOST = 5.0F;
-
     private static final DateTimeFormatter TIME_PARSER = ISODateTimeFormat.dateTime();
 
     private static final DateTimeFormatter DATE_PARSER = ISODateTimeFormat.date();
 
     private static final DateTimeFormatter TIME_PRINTER = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm");
 
-    private final RepositoryServiceManager repositoryServiceManager;
+    private final ApplicationPropertiesService propertiesService;
+
+    private final GlobalSettingsManager globalSettingsManager;
 
     private final PermissionValidationService validationService;
 
+    private final RepositoryServiceManager repositoryServiceManager;
+
     private final SoyTemplateRenderer soyTemplateRenderer;
-
-    private final StashAuthenticationContext authenticationContext;
-
-    private final ApplicationPropertiesService propertiesService;
 
     private final WebResourceManager resourceManager;
 
     public SearchServlet (
-            RepositoryServiceManager repositoryServiceManager,
-            PermissionValidationService validationService,
-            SoyTemplateRenderer soyTemplateRenderer,
-            StashAuthenticationContext authenticationContext,
             ApplicationPropertiesService propertiesService,
+            GlobalSettingsManager globalSettingsManager,
+            PermissionValidationService validationService,
+            RepositoryServiceManager repositoryServiceManager,
+            SoyTemplateRenderer soyTemplateRenderer,
             WebResourceManager resourceManager) {
-        this.repositoryServiceManager = repositoryServiceManager;
-        this.validationService = validationService;
-        this.soyTemplateRenderer = soyTemplateRenderer;
-        this.authenticationContext = authenticationContext;
         this.propertiesService = propertiesService;
+        this.globalSettingsManager = globalSettingsManager;
+        this.validationService = validationService;
+        this.repositoryServiceManager = repositoryServiceManager;
+        this.soyTemplateRenderer = soyTemplateRenderer;
         this.resourceManager = resourceManager;
     }
 
@@ -116,7 +99,11 @@ public class SearchServlet extends HttpServlet {
 
     // Returns map view of search hits for soy templates
     private ImmutableMap<String, Object> searchHitToDataMap (
-            SearchHit hit, Map<String, Repository> repoMap) {
+            SearchHit hit,
+            Map<String, Repository> repoMap,
+            int maxPreviewLines,
+            int maxMatchLines,
+            ImmutableSet<String> noHighlight) {
         ImmutableMap.Builder<String, Object> hitData = new ImmutableMap.Builder<String, Object>();
         Map<String, Object> hitSource = hit.getSource();
 
@@ -173,7 +160,7 @@ public class SearchServlet extends HttpServlet {
                 }
                 String contents = getStringFromMap(hitSource, "contents");
                 SourceSearch searchedContents = SourceSearch.search(
-                    contents, highlightField, 1, PREVIEW_LINES, MAX_MATCH_LINES);
+                    contents, highlightField, 1, maxPreviewLines, maxMatchLines);
                 String extension = FilenameUtils.getExtension(path).toLowerCase();
 
                 hitData
@@ -186,7 +173,7 @@ public class SearchServlet extends HttpServlet {
                     .put("shownLines", searchedContents.getLines().length)
                     .put("excessLines", searchedContents.getExcess())
                     .put("extension", extension)
-                    .put("noHighlight", NO_HIGHLIGHT.contains(extension));
+                    .put("noHighlight", noHighlight.contains(extension));
             }
         }
 
@@ -194,19 +181,44 @@ public class SearchServlet extends HttpServlet {
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doGet (HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
 
-        StashUser user = authenticationContext.getCurrentUser();
-        if (user == null) {
+        // Make sure user is logged in
+        try {
+            validationService.validateAuthenticated();
+        } catch (AuthorisationException notLoggedInException) {
             try {
-                resp.sendRedirect("/stash/login");
+                resp.sendRedirect(propertiesService.getLoginUri(URI.create(req.getRequestURL() +
+                    (req.getQueryString() == null ? "" : "?" + req.getQueryString())
+                )).toASCIIString());
             } catch (Exception e) {
                 log.error("Unable to redirect unauthenticated user to login page", e);
             }
             return;
         }
 
-        SearchParams params = SearchParams.getParams(req, DateTimeZone.forTimeZone(propertiesService.getDefaultTimeZone()));
+        // Query and parse settings
+        SearchParams params = SearchParams.getParams(
+            req, DateTimeZone.forTimeZone(propertiesService.getDefaultTimeZone()));
+        GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+        ImmutableSet.Builder<String> noHighlightBuilder = new ImmutableSet.Builder<String>();
+        for (String extension : globalSettings.getNoHighlightExtensions().split(",")) {
+            extension = extension.trim().toLowerCase();
+            if (!extension.isEmpty()) {
+                noHighlightBuilder.add(extension);
+            }
+        }
+        ImmutableSet<String> noHighlight = noHighlightBuilder.build();
+        int maxPreviewLines = globalSettings.getMaxPreviewLines();
+        int maxMatchLines = globalSettings.getMaxMatchLines();
+        int maxFragments = globalSettings.getMaxFragments();
+        int pageSize = globalSettings.getPageSize();
+        TimeValue searchTimeout = new TimeValue(globalSettings.getSearchTimeout());
+        float commitHashBoost = (float) globalSettings.getCommitHashBoost();
+        float commitSubjectBoost = (float) globalSettings.getCommitBodyBoost();
+        float commitBodyBoost = (float) globalSettings.getCommitBodyBoost();
+        float fileNameBoost = (float) globalSettings.getFileNameBoost();
 
         // Execute ES query
         int pages = 0;
@@ -222,11 +234,10 @@ public class SearchServlet extends HttpServlet {
             if (repoMap.isEmpty()) {
                 error = "You do not have permissions to access any repositories";
             }
-            int startIndex = params.page * PAGE_SIZE;
+            int startIndex = params.page * pageSize;
             SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_SEARCHALIAS)
                 .setFrom(startIndex)
-                .setSize(PAGE_SIZE)
-                .setTimeout(SEARCH_TIMEOUT)
+                .setTimeout(searchTimeout)
                 .setFetchSource(true);
 
             if (error != null && !error.isEmpty()) {
@@ -242,12 +253,12 @@ public class SearchServlet extends HttpServlet {
                         .defaultOperator(QueryStringQueryBuilder.Operator.AND);
                     if (params.searchCommits) {
                         queryStringQuery
-                            .field("commit.subject", COMMIT_SUBJECT_BOOST)
-                            .field("commit.hash", COMMIT_HASH_BOOST)
-                            .field("commit.body", COMMIT_BODY_BOOST);
+                            .field("commit.subject", commitSubjectBoost)
+                            .field("commit.hash", commitHashBoost)
+                            .field("commit.body", commitBodyBoost);
                     }
                     if (params.searchFilenames) {
-                        queryStringQuery.field("file.path", FILE_PATH_BOOST);
+                        queryStringQuery.field("file.path", fileNameBoost);
                     }
                     if (params.searchCode) {
                         queryStringQuery.field("file.contents", 1);
@@ -265,7 +276,7 @@ public class SearchServlet extends HttpServlet {
                 esReq.setQuery(finalQuery)
                     .setHighlighterPreTags("\u0001")
                     .setHighlighterPostTags("\u0001")
-                    .addHighlightedField("contents", 1, MAX_FRAGMENTS);
+                    .addHighlightedField("contents", 1, maxFragments);
 
                 String[] typeArray = {};
                 if (params.searchCommits) {
@@ -290,7 +301,7 @@ public class SearchServlet extends HttpServlet {
                 if (esResp != null) {
                     SearchHits esHits = esResp.getHits();
                     totalHits = esHits.getTotalHits();
-                    pages = (int) Math.min((long) Integer.MAX_VALUE, (totalHits + PAGE_SIZE - 1) / PAGE_SIZE);
+                    pages = (int) Math.min((long) Integer.MAX_VALUE, (totalHits + pageSize - 1) / pageSize);
                     currentHits = esHits.getHits();
                     searchTime = esResp.getTookInMillis();
                     for (ShardSearchFailure failure : esResp.getShardFailures()) {
@@ -305,7 +316,8 @@ public class SearchServlet extends HttpServlet {
 
             // Iterate through current page of search hits
             for (SearchHit hit : currentHits) {
-                ImmutableMap<String, Object> hitData = searchHitToDataMap(hit, repoMap);
+                ImmutableMap<String, Object> hitData = searchHitToDataMap(
+                    hit, repoMap, maxPreviewLines, maxMatchLines, noHighlight);
                 if (hitData != null) {
                     hitArray.add(hitData);
                 }
@@ -321,7 +333,6 @@ public class SearchServlet extends HttpServlet {
             String fullUri = req.getRequestURI() + "?" +
                 (queryString == null ? "" : queryString.replaceAll("&?page=\\d*", ""));
             int startIndex = fullUri.indexOf("/plugins/");
-            String uriPrefix = startIndex < 0 ? "" : fullUri.substring(0, startIndex);
             ImmutableMap<String, Object> data = new ImmutableMap.Builder<String, Object>()
                 .put("pages", pages)
                 .put("currentPage", params.page)
@@ -331,9 +342,9 @@ public class SearchServlet extends HttpServlet {
                 .put("hitArray", hitArray)
                 .put("error", error)
                 .put("fullUri", fullUri)
-                .put("uriPrefix", uriPrefix)
-                .put("resultFrom", Math.min(totalHits, params.page * PAGE_SIZE + 1))
-                .put("resultTo", Math.min(totalHits, (params.page + 1) * PAGE_SIZE))
+                .put("baseUrl", propertiesService.getBaseUrl())
+                .put("resultFrom", Math.min(totalHits, params.page * pageSize + 1))
+                .put("resultTo", Math.min(totalHits, (params.page + 1) * pageSize))
                 .put("searchTime", searchTime)
                 .build();
             soyTemplateRenderer.render(resp.getWriter(),

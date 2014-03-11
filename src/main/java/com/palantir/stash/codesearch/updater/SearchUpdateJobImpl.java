@@ -8,6 +8,7 @@ package com.palantir.stash.codesearch.updater;
 import com.atlassian.stash.repository.*;
 import com.atlassian.stash.scm.git.*;
 import com.google.common.collect.ImmutableList;
+import com.palantir.stash.codesearch.admin.GlobalSettings;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,13 +38,6 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     private static final String EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
     private static final String NULL_HASH = "0000000000000000000000000000000000000000";
-
-    private static final String AUTHOR_NAME = "Stash Codesearch";
-
-    private static final String AUTHOR_EMAIL = "codesearch@noreply";
-
-    // TODO: make this configurable w/ plugin settings
-    private static final int MAX_FILE_SIZE = 256 * 1024;
 
     private static final int MAX_ES_RETRIES = 10;
 
@@ -213,29 +207,42 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     @Override
-    public void doReindex (GitScm gitScm) {
-        deleteLatestIndexedNote();
-        SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_UPDATEALIAS)
-            .setFetchSource(false)
-            .setSize(Integer.MAX_VALUE - 99)
-            .setQuery(filteredQuery(matchAllQuery(), andFilter(
-                projectRepositoryFilter(repository.getProject().getKey(), repository.getSlug()),
-                exactRefFilter(ref))));
-        try {
-            BulkRequestBuilder bulkDelete = ES_CLIENT.prepareBulk();
-            for (SearchHit hit : esReq.get().getHits().getHits()) {
-                bulkDelete.add(buildDeleteFromRef(hit.getType(), hit.getId()));
-            }
-            bulkDelete.get();
-        } catch (Exception e) {
-            log.error("Could not delete documents for {}, aborting", toString(), e);
+    public void doReindex (GitScm gitScm, GlobalSettings globalSettings) {
+        if (!globalSettings.getIndexingEnabled()) {
             return;
         }
-        doUpdate(gitScm);
+        deleteLatestIndexedNote();
+        while (true) {
+            try {
+                SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_UPDATEALIAS)
+                    .setSize(1000)
+                    .setFetchSource(false)
+                    .setQuery(filteredQuery(matchAllQuery(), andFilter(
+                        projectRepositoryFilter(
+                            repository.getProject().getKey(), repository.getSlug()),
+                        exactRefFilter(ref))));
+                BulkRequestBuilder bulkDelete = ES_CLIENT.prepareBulk().setRefresh(true);
+                for (SearchHit hit : esReq.get().getHits().getHits()) {
+                    bulkDelete.add(buildDeleteFromRef(hit.getType(), hit.getId()));
+                }
+                if (bulkDelete.numberOfActions() == 0) {
+                    break;
+                }
+                bulkDelete.get();
+            } catch (Exception e) {
+                log.error("Could not delete documents for {}, aborting", toString(), e);
+                return;
+            }
+        }
+        doUpdate(gitScm, globalSettings);
     }
 
     @Override
-    public void doUpdate (GitScm gitScm) {
+    public void doUpdate (GitScm gitScm, GlobalSettings globalSettings) {
+        if (!globalSettings.getIndexingEnabled()) {
+            return;
+        }
+
         GitCommandBuilderFactory builderFactory = gitScm.getCommandBuilderFactory();
 
         // List of bulk requests to execute sequentially at the end of the method
@@ -258,7 +265,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Diff for files & process changes
-        BulkRequestBuilder bulkFileDelete = ES_CLIENT.prepareBulk();
+        BulkRequestBuilder bulkFileDelete = ES_CLIENT.prepareBulk().setRefresh(true);
         Set<SimpleEntry<String, String>> filesToAdd =
             new LinkedHashSet<SimpleEntry<String, String>>();
         try {
@@ -327,7 +334,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // simply add the ref to the refs array.
         if (!filesToAdd.isEmpty()) {
             try {
-                BulkRequestBuilder bulkFileRefUpdate = ES_CLIENT.prepareBulk();
+                BulkRequestBuilder bulkFileRefUpdate = ES_CLIENT.prepareBulk().setRefresh(true);
                 ImmutableList<SimpleEntry<String, String>> filesToAddCopy =
                     ImmutableList.copyOf(filesToAdd);
                 for (SimpleEntry<String, String> bppair : filesToAddCopy) {
@@ -357,7 +364,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // Process all changes w/o corresponding documents
         if (!filesToAdd.isEmpty()) {
             try {
-                BulkRequestBuilder bulkFileAdd = ES_CLIENT.prepareBulk();
+                BulkRequestBuilder bulkFileAdd = ES_CLIENT.prepareBulk().setRefresh(true);
                 // Get filesizes and prune all files that exceed the filesize limit
                 ImmutableList<SimpleEntry<String, String>> filesToAddCopy =
                     ImmutableList.copyOf(filesToAdd);
@@ -377,9 +384,10 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 }
                 CatFileOutputHandler catFileOutput = new CatFileOutputHandler();
                 int count = 0;
+                int maxFileSize = globalSettings.getMaxFileSize();
                 for (SimpleEntry<String, String> bppair : filesToAddCopy) {
                     int fs = Integer.parseInt(catFileMetadata[count].split("\\s")[2]);
-                    if (fs > MAX_FILE_SIZE) {
+                    if (fs > maxFileSize) {
                         filesToAdd.remove(bppair);
                     } else {
                         catFileOutput.addFile(fs);
@@ -444,7 +452,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Remove deleted commits from ES index
-        BulkRequestBuilder bulkCommitDelete = ES_CLIENT.prepareBulk();
+        BulkRequestBuilder bulkCommitDelete = ES_CLIENT.prepareBulk().setRefresh(true);
         for (String hash : deletedCommits) {
             if (hash.length() != 40) {
                 continue;
@@ -469,7 +477,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Add new commits to ES index
-        BulkRequestBuilder bulkCommitAdd = ES_CLIENT.prepareBulk();
+        BulkRequestBuilder bulkCommitAdd = ES_CLIENT.prepareBulk().setRefresh(true);
         for (String line : newCommits) {
             try {
                 // Parse each commit "line" (not really lines, since they're delimited by \u0003)
@@ -532,6 +540,6 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
         // Update latest indexed note
         addLatestIndexedNote(newHash);
-   }
+    }
 
 }
