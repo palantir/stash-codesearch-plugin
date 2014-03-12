@@ -237,6 +237,7 @@ public class SearchServlet extends HttpServlet {
             int startIndex = params.page * pageSize;
             SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_SEARCHALIAS)
                 .setFrom(startIndex)
+                .setSize(pageSize)
                 .setTimeout(searchTimeout)
                 .setFetchSource(true);
 
