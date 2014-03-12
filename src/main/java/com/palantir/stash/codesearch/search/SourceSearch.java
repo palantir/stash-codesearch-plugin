@@ -147,7 +147,7 @@ class SourceSearch {
         int[] lineNums = new int[linesToShow];
         for (int i = 0, curCount = 0; i < sourceLines.length && curCount < linesToShow; ++i) {
             if (includeLine[i]) {
-                matchingLines[curCount] = ellipsisLine[i] ? "..." : sourceLines[i];
+                matchingLines[curCount] = ellipsisLine[i] ? "" : sourceLines[i];
                 lineNums[curCount] = ellipsisLine[i] ? -1 : i + 1;
                 ++curCount;
             }
