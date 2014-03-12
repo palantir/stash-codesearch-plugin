@@ -66,6 +66,7 @@
     padding-bottom:5px;
     border-radius: 0 0 7px 7px;
     border:1px solid #A0A0A0;
+    overflow:auto;
 }
 
 .commit-subject {
