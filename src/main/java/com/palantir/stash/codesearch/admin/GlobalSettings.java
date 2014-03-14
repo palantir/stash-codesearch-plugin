@@ -28,7 +28,7 @@ public interface GlobalSettings extends Entity {
 
     // Maximum file size to index (in bytes)
     public static final int MAX_FILE_SIZE_DEFAULT = 256 * 1024;
-    public static final int MAX_FILE_SIZE_LB = 16 * 1024;
+    public static final int MAX_FILE_SIZE_LB = 1024;
     public static final int MAX_FILE_SIZE_UB = 16 * 1024 * 1024;
     @NotNull
     @Default(MAX_FILE_SIZE_DEFAULT + "")

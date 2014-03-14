@@ -54,23 +54,6 @@ public class GlobalSettingsServlet extends HttpServlet {
         this.soyTemplateRenderer = soyTemplateRenderer;
     }
 
-    private static ImmutableMap<String, Object> getSettingsMap (GlobalSettings settings) {
-        return new ImmutableMap.Builder<String, Object>()
-            .put("indexingEnabled", settings.getIndexingEnabled())
-            .put("maxFileSize", settings.getMaxFileSize())
-            .put("searchTimeout", settings.getSearchTimeout())
-            .put("noHighlightExtensions", settings.getNoHighlightExtensions())
-            .put("maxPreviewLines", settings.getMaxPreviewLines())
-            .put("maxMatchLines", settings.getMaxMatchLines())
-            .put("maxFragments", settings.getMaxFragments())
-            .put("pageSize", settings.getPageSize())
-            .put("commitHashBoost", settings.getCommitHashBoost())
-            .put("commitSubjectBoost", settings.getCommitSubjectBoost())
-            .put("commitBodyBoost", settings.getCommitBodyBoost())
-            .put("fileNameBoost", settings.getFileNameBoost())
-            .build();
-    }
-
     private static int parseInt (
             String fieldName, int min, int max, String value)
             throws IllegalArgumentException {
