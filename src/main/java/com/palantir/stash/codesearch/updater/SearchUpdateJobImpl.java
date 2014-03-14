@@ -265,7 +265,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Diff for files & process changes
-        BulkRequestBuilder bulkFileDelete = ES_CLIENT.prepareBulk().setRefresh(true);
+        BulkRequestBuilder bulkFileDelete = ES_CLIENT.prepareBulk();
         Set<SimpleEntry<String, String>> filesToAdd =
             new LinkedHashSet<SimpleEntry<String, String>>();
         try {
@@ -334,7 +334,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // simply add the ref to the refs array.
         if (!filesToAdd.isEmpty()) {
             try {
-                BulkRequestBuilder bulkFileRefUpdate = ES_CLIENT.prepareBulk().setRefresh(true);
+                BulkRequestBuilder bulkFileRefUpdate = ES_CLIENT.prepareBulk();
                 ImmutableList<SimpleEntry<String, String>> filesToAddCopy =
                     ImmutableList.copyOf(filesToAdd);
                 for (SimpleEntry<String, String> bppair : filesToAddCopy) {
@@ -364,7 +364,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // Process all changes w/o corresponding documents
         if (!filesToAdd.isEmpty()) {
             try {
-                BulkRequestBuilder bulkFileAdd = ES_CLIENT.prepareBulk().setRefresh(true);
+                BulkRequestBuilder bulkFileAdd = ES_CLIENT.prepareBulk();
                 // Get filesizes and prune all files that exceed the filesize limit
                 ImmutableList<SimpleEntry<String, String>> filesToAddCopy =
                     ImmutableList.copyOf(filesToAdd);
@@ -452,7 +452,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Remove deleted commits from ES index
-        BulkRequestBuilder bulkCommitDelete = ES_CLIENT.prepareBulk().setRefresh(true);
+        BulkRequestBuilder bulkCommitDelete = ES_CLIENT.prepareBulk();
         for (String hash : deletedCommits) {
             if (hash.length() != 40) {
                 continue;
@@ -477,7 +477,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Add new commits to ES index
-        BulkRequestBuilder bulkCommitAdd = ES_CLIENT.prepareBulk().setRefresh(true);
+        BulkRequestBuilder bulkCommitAdd = ES_CLIENT.prepareBulk();
         for (String line : newCommits) {
             try {
                 // Parse each commit "line" (not really lines, since they're delimited by \u0003)
