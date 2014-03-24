@@ -249,7 +249,7 @@ public class SearchServlet extends HttpServlet {
                 QueryBuilder query = matchAllQuery();
                 if (params.searchString != null && !params.searchString.isEmpty()) {
                     QueryStringQueryBuilder queryStringQuery = queryString(params.searchString)
-                        .analyzeWildcard(false)
+                        .analyzeWildcard(true)
                         .lenient(true)
                         .defaultOperator(QueryStringQueryBuilder.Operator.AND);
                     if (params.searchCommits) {
