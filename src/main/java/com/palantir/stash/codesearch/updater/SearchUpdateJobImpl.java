@@ -16,6 +16,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -422,7 +423,10 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                                 .field("repository", repository.getSlug())
                                 .field("blob", blob)
                                 .field("path", path)
+                                .field("extension", FilenameUtils.getExtension(path).toLowerCase())
                                 .field("contents", fileContent)
+                                .field("charcount", fileContent.length())
+                                .field("linecount", countLines(fileContent))
                                 .startArray("refs")
                                     .value(ref)
                                 .endArray()
@@ -540,6 +544,19 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
         // Update latest indexed note
         addLatestIndexedNote(newHash);
+    }
+
+    private static final int countLines (String str) {
+        char prevChar = '\n', c;
+        int count = 0;
+        for (int i = 0; i < str.length(); ++i) {
+            c = str.charAt(i);
+            if ((prevChar == '\r' && c != '\n') || prevChar == '\n') {
+                ++count;
+            }
+            prevChar = c;
+        }
+        return count;
     }
 
 }

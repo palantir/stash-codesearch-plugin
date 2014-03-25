@@ -154,6 +154,26 @@ public class SearchFilters {
         return filterAdded ? filter : matchAllFilter();
     }
 
+    public static FilterBuilder extensionFilter (String[] extensions) {
+        return extensionFilter(toIterable(extensions));
+    }
+
+    public static FilterBuilder extensionFilter (Iterable<String> extensions) {
+        boolean filterAdded = false;
+        OrFilterBuilder filter = orFilter();
+        for (String extension : extensions) {
+            extension = extension.trim();
+            if (extension.isEmpty()) {
+                continue;
+            }
+            filter.add(termFilter("extension", extension)
+                .cache(true)
+                .cacheKey("CACHE^EXTENSIONFILTER^" + extension));
+            filterAdded = true;
+        }
+        return filterAdded ? filter.add(typeFilter("commit")) : matchAllFilter();
+    }
+
     public static FilterBuilder authorFilter (String[] authors) {
         return authorFilter(toIterable(authors));
     }
