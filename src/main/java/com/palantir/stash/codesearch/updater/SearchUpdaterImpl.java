@@ -114,6 +114,28 @@ public class SearchUpdaterImpl implements SearchUpdater {
         String newIndex = random.nextLong() + "-" + System.nanoTime();
         try {
             ES_CLIENT.admin().indices().prepareCreate(newIndex)
+                // Latest indexed note schema
+                .addMapping("latestindexed",
+                    jsonBuilder().startObject()
+                        .startObject("properties")
+                            .startObject("project")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("repository")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("ref")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("hash")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                        .endObject()
+                    .endObject())
                 // Commit schema
                 .addMapping("commit",
                     jsonBuilder().startObject()
@@ -463,7 +485,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
             List<Future> futures = new ArrayList<Future>();
             for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
                 for (Branch branch : repositoryServiceManager.getBranchMap(repo).values()) {
-                    futures.add(submitAsyncReindex(repo, branch.getId(), 0));
+                    // No need to explicitly trigger reindex, since index is empty.
+                    futures.add(submitAsyncUpdate(repo, branch.getId(), 0));
                 }
             }
             for (Future future : futures) {
