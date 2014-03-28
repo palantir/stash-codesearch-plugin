@@ -9,6 +9,7 @@ import com.atlassian.stash.repository.*;
 import com.atlassian.stash.scm.git.*;
 import com.google.common.collect.ImmutableList;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
+import com.palantir.stash.codesearch.elasticsearch.RequestBuffer;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -247,7 +248,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         GitCommandBuilderFactory builderFactory = gitScm.getCommandBuilderFactory();
 
         // List of bulk requests to execute sequentially at the end of the method
-        List<BulkRequestBuilder> bulkRequests = new ArrayList<BulkRequestBuilder>();
+        RequestBuffer requestBuffer = new RequestBuffer(ES_CLIENT);
 
         // Unique identifier for repo
         String repoDesc = getRepoDesc();
@@ -266,7 +267,6 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Diff for files & process changes
-        BulkRequestBuilder bulkFileDelete = ES_CLIENT.prepareBulk();
         Set<SimpleEntry<String, String>> filesToAdd =
             new LinkedHashSet<SimpleEntry<String, String>>();
         try {
@@ -301,13 +301,13 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 // File deleted
                 } else if (status.startsWith("D")) {
                     String path = diffToks[++curTok];
-                    bulkFileDelete.add(buildDeleteFileFromRef(oldBlob, path));
+                    requestBuffer.add(buildDeleteFileFromRef(oldBlob, path));
 
                 // File modified
                 } else if (status.startsWith("M") || status.startsWith("T")) {
                     String path = diffToks[++curTok];
                     if (!oldBlob.equals(newBlob)) {
-                        bulkFileDelete.add(buildDeleteFileFromRef(oldBlob, path));
+                        requestBuffer.add(buildDeleteFileFromRef(oldBlob, path));
                         filesToAdd.add(new SimpleEntry(newBlob, path));
                     }
 
@@ -315,7 +315,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 } else if (status.startsWith("R")) {
                     String fromPath = diffToks[++curTok];
                     String toPath = diffToks[++curTok];
-                    bulkFileDelete.add(buildDeleteFileFromRef(oldBlob, fromPath));
+                    requestBuffer.add(buildDeleteFileFromRef(oldBlob, fromPath));
                     filesToAdd.add(new SimpleEntry(newBlob, toPath));
 
                 // Unknown change
@@ -328,9 +328,8 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 prevHash, newHash, e);
             return;
         }
-        bulkRequests.add(bulkFileDelete);
-        log.debug("{} update: adding {} files, deleting {} files",
-            refDesc, filesToAdd.size(), bulkFileDelete.numberOfActions());
+        //TODO: warn ==> debug
+        log.warn("{} update: adding {} files", refDesc, filesToAdd.size());
 
         // Add new blob/path pairs. We use another bulk request here to cut down on the number of
         // cat-files we need to perform -- if a blob already exists in the ES cluster, we can
@@ -363,12 +362,11 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 log.warn("file-ref update failed, performing upserts for all changes", e);
             }
         }
-        log.debug("{} update: {} files to upsert", refDesc, filesToAdd.size());
+        log.warn("{} update: {} files to upsert", refDesc, filesToAdd.size());
 
         // Process all changes w/o corresponding documents
         if (!filesToAdd.isEmpty()) {
             try {
-                BulkRequestBuilder bulkFileAdd = ES_CLIENT.prepareBulk();
                 // Get filesizes and prune all files that exceed the filesize limit
                 ImmutableList<SimpleEntry<String, String>> filesToAddCopy =
                     ImmutableList.copyOf(filesToAdd);
@@ -418,7 +416,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     String blob = bppair.getKey(), path = bppair.getValue();
                     String fileContent = fileContents[count];
                     if (fileContent != null) {
-                        bulkFileAdd.add(buildAddFileToRef(blob, path)
+                        requestBuffer.add(buildAddFileToRef(blob, path)
                             // Upsert inserts a new document into the index if it does not already exist.
                             .setUpsert(jsonBuilder()
                             .startObject()
@@ -437,7 +435,6 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     }
                     ++count;
                 }
-                bulkRequests.add(bulkFileAdd);
             } catch (Exception e) {
                 log.error("Caught error during new file indexing, aborting update", e);
                 return;
@@ -459,14 +456,14 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Remove deleted commits from ES index
-        BulkRequestBuilder bulkCommitDelete = ES_CLIENT.prepareBulk();
+        int commitsDeleted = 0;
         for (String hash : deletedCommits) {
             if (hash.length() != 40) {
                 continue;
             }
-            bulkCommitDelete.add(buildDeleteCommitFromRef(hash));
+            requestBuffer.add(buildDeleteCommitFromRef(hash));
+            ++commitsDeleted;
         }
-        bulkRequests.add(bulkCommitDelete);
 
         // Get new commits
         String [] newCommits;
@@ -484,7 +481,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Add new commits to ES index
-        BulkRequestBuilder bulkCommitAdd = ES_CLIENT.prepareBulk();
+        int commitsAdded = 0;
         for (String line : newCommits) {
             try {
                 // Parse each commit "line" (not really lines, since they're delimited by \u0003)
@@ -506,7 +503,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 }
 
                 // Add commit to request
-                bulkCommitAdd.add(
+                requestBuffer.add(
                     buildAddCommitToRef(hash)
                     .setUpsert(jsonBuilder()
                     .startObject()
@@ -523,30 +520,18 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                         .endArray()
                     .endObject())
                 );
+                ++commitsAdded;
             } catch (Exception e) {
-                log.warn("Caught error while constructing bulk request object, skipping update", e);
+                log.warn("Caught error while constructing request object, skipping update", e);
                 continue;
             }
         }
-        bulkRequests.add(bulkCommitAdd);
 
-        log.debug("{} update: adding {} commits, deleting {} commits",
-            refDesc, bulkCommitAdd.numberOfActions(), bulkCommitDelete.numberOfActions());
+        log.warn("{} update: adding {} commits, deleting {} commits",
+            refDesc, commitsAdded, commitsDeleted);
 
-        // Submit all bulk requests
-        try {
-            for (BulkRequestBuilder bulkRequest : bulkRequests) {
-                if (bulkRequest.numberOfActions() > 0) {
-                    for (BulkItemResponse response : bulkRequest.get().getItems()) {
-                        if (response.isFailed()) {
-                            log.warn("Operation failed with message {}", response.getFailureMessage());
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Caught error while executing bulk requests, aborting update", e);
-        }
+        // Write remaining requests and wait for completion
+        requestBuffer.flush();
 
         // Update latest indexed note
         addLatestIndexedNote(newHash);

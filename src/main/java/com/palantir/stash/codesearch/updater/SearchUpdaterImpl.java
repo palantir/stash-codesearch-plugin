@@ -21,6 +21,7 @@ import java.security.SecureRandom;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
+import org.elasticsearch.common.settings.ImmutableSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -481,6 +482,12 @@ public class SearchUpdaterImpl implements SearchUpdater {
                 jobPoolBlocked.set(false);
             }
 
+            // Disable refresh for faster bulk indexing
+            ES_CLIENT.admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
+                .setSettings(ImmutableSettings.builder()
+                    .put("index.refresh_interval", "-1"))
+                .get();
+
             // Submit and wait for each job
             List<Future> futures = new ArrayList<Future>();
             for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
@@ -493,6 +500,12 @@ public class SearchUpdaterImpl implements SearchUpdater {
                 waitForFuture(future);
             }
 
+            // Re-enable refresh & optimize, enable searching on index
+            ES_CLIENT.admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
+                .setSettings(ImmutableSettings.builder()
+                    .put("index.refresh_interval", "1s"))
+                .get();
+            ES_CLIENT.admin().indices().prepareOptimize(ES_UPDATEALIAS).get();
             redirectAndDeleteAliasedIndex(ES_SEARCHALIAS, ES_UPDATEALIAS);
         } finally {
             isReindexingAll.getAndSet(false);
