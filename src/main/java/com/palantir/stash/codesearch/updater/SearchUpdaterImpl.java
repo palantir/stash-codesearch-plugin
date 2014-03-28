@@ -114,6 +114,28 @@ public class SearchUpdaterImpl implements SearchUpdater {
         String newIndex = random.nextLong() + "-" + System.nanoTime();
         try {
             ES_CLIENT.admin().indices().prepareCreate(newIndex)
+                // Latest indexed note schema
+                .addMapping("latestindexed",
+                    jsonBuilder().startObject()
+                        .startObject("properties")
+                            .startObject("project")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("repository")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("ref")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                            .startObject("hash")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
+                        .endObject()
+                    .endObject())
                 // Commit schema
                 .addMapping("commit",
                     jsonBuilder().startObject()
@@ -146,9 +168,18 @@ public class SearchUpdaterImpl implements SearchUpdater {
                                 .field("search_analyzer", "name_analyzer")
                             .endObject()
                             .startObject("authoremail")
-                                .field("type", "string")
-                                .field("index_analyzer", "email_analyzer")
-                                .field("search_analyzer", "email_analyzer")
+                                .field("type", "multi_field")
+                                .startObject("fields")
+                                    .startObject("authoremail")
+                                        .field("type", "string")
+                                        .field("index_analyzer", "email_analyzer")
+                                        .field("search_analyzer", "email_analyzer")
+                                    .endObject()
+                                    .startObject("untouched")
+                                        .field("type", "string")
+                                        .field("index", "not_analyzed")
+                                    .endObject()
+                                .endObject()
                             .endObject()
                             .startObject("body")
                                 .field("type", "string")
@@ -201,10 +232,26 @@ public class SearchUpdaterImpl implements SearchUpdater {
                                 .field("index_analyzer", "path_analyzer")
                                 .field("search_analyzer", "path_analyzer")
                             .endObject()
+                            .startObject("extension")
+                                .field("type", "string")
+                                .field("index", "not_analyzed")
+                            .endObject()
                             .startObject("contents")
                                 .field("type", "string")
                                 .field("index_analyzer", "code_analyzer")
                                 .field("search_analyzer", "code_analyzer")
+                            .endObject()
+                            .startObject("charcount")
+                                .field("type", "integer")
+                                .startObject("fielddata")
+                                    .field("format", "doc_values")
+                                .endObject()
+                            .endObject()
+                            .startObject("linecount")
+                                .field("type", "integer")
+                                .startObject("fielddata")
+                                    .field("format", "doc_values")
+                                .endObject()
                             .endObject()
                         .endObject()
                     .endObject())
@@ -326,7 +373,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
                     } else {
                         job.doUpdate(gitScm, globalSettings);
                     }
-               } catch (Throwable e) {
+                } catch (Throwable e) {
                     log.error("Unexpected error while updating index for {}", job.toString(), e);
                 } finally {
                     releaseLock(job);
@@ -438,7 +485,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
             List<Future> futures = new ArrayList<Future>();
             for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
                 for (Branch branch : repositoryServiceManager.getBranchMap(repo).values()) {
-                    futures.add(submitAsyncReindex(repo, branch.getId(), 0));
+                    // No need to explicitly trigger reindex, since index is empty.
+                    futures.add(submitAsyncUpdate(repo, branch.getId(), 0));
                 }
             }
             for (Future future : futures) {

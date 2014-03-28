@@ -9,7 +9,19 @@
     margin-top:40px;
 }
 
-.result-container {
+div.statistics-container {
+    width:950px;
+    display:table;
+    margin-top:20px;
+}
+
+div.statistics-pane {
+    display:table-cell;
+    padding-top:20px;
+    padding-right:20px;
+}
+
+div.result-container {
     border:1px solid gray;
     border-radius:6px;
     background-color:#FFFFFF;
@@ -71,10 +83,6 @@
 
 .commit-subject {
     color:#A000B0;
-}
-
-.result-count {
-    margin-top:15px;
 }
 
 .no-results {

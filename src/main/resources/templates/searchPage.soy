@@ -4,6 +4,7 @@
  * Search page template
  * @param doSearch
  * @param hitArray
+ * @param statistics
  * @param pages
  * @param currentPage
  * @param fullUri
@@ -44,7 +45,8 @@
             <input class="text medium-field" type="text" id="searchString" name="searchString" {if $prevParams.searchString}value="{$prevParams.searchString}"{/if}>
             <div class="description">
                 String to search for in source code, commit messages and filenames.
-                Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.</div>
+                Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.
+            </div>
         </div>
     </fieldset>
     <h3>Filters (optional)</h3>
@@ -75,6 +77,12 @@
             <label for="refNames">Ref names</label>
             <input class="text medium-field" type="text" name="refNames" id="refNames" placeholder="Default: any ref" {if $prevParams.refNames}value="{$prevParams.refNames}"{/if}>
             <div class="description">Comma-separated</div>
+        </div>
+        <div class="field-group">
+            <label for="extensions">File extensions</label>
+            <input class="text medium-field" type="text" id="extensions" name="extensions" placeholder="Default: any extension" {if $prevParams.extensions}value="{$prevParams.extensions}"{/if}>
+            <div class=description>Comma separated, files only</div>
+        </div>
         <div class="field-group">
             <label for="authorNames">Author/editor names or emails</label>
             <input class="text medium-field" type="text" id="authorNames" name="authorNames" placeholder="Default: any author" {if $prevParams.authorNames}value="{$prevParams.authorNames}"{/if}>
@@ -94,6 +102,9 @@
     <div class="buttons-container">
         <div class="buttons">
             <input class="button submit" type="submit" value="Search" id="search-button">
+            <input class="button submit" type="submit" value="Statistics" id="statistics-button"
+                onclick="AJS.$('#showStatisticsHidden').val('true')">
+            <input type="hidden" name="showStatistics" id="showStatisticsHidden" value="false">
         </div>
     </div>
 </form>
@@ -102,10 +113,89 @@
     <button class="aui-button aui-button-primary" onclick="AJS.$('#search-form').show(); AJS.$('#search-query-toggle').hide();">Search again</button>
 </div>
 
-{if $totalHits > 0}
-<div class="result-count">
-    Showing results {$resultFrom}-{$resultTo} ({$totalHits} total), took {$searchTime} ms
+{if length(keys($statistics))}
+<div class="statistics-container">
+    <div style="display:table-row;">
+        <div class="statistics-pane">
+            {if $statistics.filecount}
+            <h2>General file statistics</h2>
+            <table class="aui statistics-table">
+                <tr><td>Number of files</b></td><td>{$statistics.filecount}</td></tr>
+                <tr><td>Unique file extensions</td><td>{$statistics.extensionCardinality}</td></tr>
+            </table>
+            {/if}
+        </div>
+        <div class="statistics-pane">
+            {if $statistics.commitcount}
+            <h2>Commit Statistics</h2>
+            <table class="aui statistics-table">
+                <tr><td>Number of commits</td><td>{$statistics.commitcount}</td></tr>
+                <tr><td>Unique authors</td><td>{$statistics.authorCardinality}</td></tr>
+            </table>
+            {/if}
+        </div>
+    </div>
+    <div style="display:table-row;">
+        <div class="statistics-pane">
+            {if $statistics.filecount}
+            <h2>File character count statistics</h2>
+            <table class="aui statistics-table">
+                <tr><td>Total character count</td><td>{$statistics.charcount.sum}</td></tr>
+                <tr><td>Average character count</td><td>{round($statistics.charcount.average, 1)}</td></tr>
+                <tr><td>Minimum character count</td><td>{$statistics.charcount.min}</td></tr>
+                {foreach $entry in $statistics.charcount.percentiles}
+                <tr><td>{round($entry.percentile)}-percentile character count</td><td>{round($entry.value)}</td></tr>
+                {/foreach}
+                <tr><td>Maximum character count</td><td>{$statistics.charcount.max}</td></tr>
+            </table>
+            {/if}
+        </div>
+        <div class="statistics-pane">
+            {if $statistics.filecount}
+            <h2>File line count statistics</h2>
+            <table class="aui statistics-table">
+                <tr><td>Total line count</td><td>{$statistics.linecount.sum}</td></tr>
+                <tr><td>Average line count</td><td>{round($statistics.linecount.average, 2)}</td></tr>
+                <tr><td>Minimum line count</td><td>{$statistics.linecount.min}</td></tr>
+                {foreach $entry in $statistics.linecount.percentiles}
+                <tr><td>{round($entry.percentile)}-percentile line count</td><td>{round($entry.value)}</td></tr>
+                {/foreach}
+                <tr><td>Maximum line count</td><td>{$statistics.linecount.max}</td></tr>
+            </table>
+
+            {/if}
+        </div>
+    </div>
+    <div style="display:table-row;">
+        <div class="statistics-pane">
+            {if length($statistics.extensionRanking)}
+            <h2>Top file extensions</h2>
+            <table class="aui statistics-table">
+                <tr><th>Extension</th><th>Files</th></tr>
+                {foreach $entry in $statistics.extensionRanking}
+                <tr><td>{if $entry.key}{$entry.key}{else}<i>None</i>{/if}</td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td><tr>
+                {/foreach}
+            </table>
+            {/if}
+        </div>
+        <div class="statistics-pane">
+            {if length($statistics.authorRanking)}
+            <h2>Top authors</h2>
+            <table class="aui statistics-table">
+                <tr><th>Author</th><th>Commits</th></tr>
+                {foreach $entry in $statistics.authorRanking}
+                <tr><td>{if $entry.key}<a href="mailto:{$entry.key}">{$entry.key}</a>{else}<i>None</i>{/if}</a></td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td></tr>
+                {/foreach}
+            </table>
+            {/if}
+        </div>
+    </div>
 </div>
+{/if}
+
+{if $totalHits > 0}
+<h2>Results {$resultFrom}-{$resultTo} of {$totalHits}</h2>
+<span>Took {$searchTime} ms</span>
 {/if}
 
 {foreach $hit in $hitArray}

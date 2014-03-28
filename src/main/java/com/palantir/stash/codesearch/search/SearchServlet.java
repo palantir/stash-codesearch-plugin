@@ -10,6 +10,7 @@ import com.atlassian.stash.exception.AuthorisationException;
 import com.atlassian.stash.server.ApplicationPropertiesService;
 import com.atlassian.stash.user.*;
 import com.atlassian.stash.repository.*;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
@@ -29,6 +30,12 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.*;
 import org.elasticsearch.search.*;
+import org.elasticsearch.search.aggregations.*;
+import org.elasticsearch.search.aggregations.bucket.filter.Filter;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
+import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
+import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
+import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
 import org.elasticsearch.search.highlight.*;
 import org.joda.time.*;
 import org.joda.time.format.*;
@@ -37,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 import static org.elasticsearch.common.xcontent.XContentFactory.*;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.*;
 import static org.elasticsearch.index.query.FilterBuilders.*;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 
@@ -49,6 +57,8 @@ public class SearchServlet extends HttpServlet {
     private static final DateTimeFormatter DATE_PARSER = ISODateTimeFormat.date();
 
     private static final DateTimeFormatter TIME_PRINTER = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm");
+
+    private static final double[] PERCENTILES = {1.0, 5.0, 25.0, 50.0, 75.0, 95.0, 99.0};
 
     private final ApplicationPropertiesService propertiesService;
 
@@ -161,7 +171,7 @@ public class SearchServlet extends HttpServlet {
                 String contents = getStringFromMap(hitSource, "contents");
                 SourceSearch searchedContents = SourceSearch.search(
                     contents, highlightField, 1, maxPreviewLines, maxMatchLines);
-                String extension = FilenameUtils.getExtension(path).toLowerCase();
+                String extension = getStringFromMap(hitSource, "extension");
 
                 hitData
                     .put("path", path)
@@ -228,6 +238,7 @@ public class SearchServlet extends HttpServlet {
         String error = "";
         ArrayList<ImmutableMap<String, Object>> hitArray =
             new ArrayList<ImmutableMap<String, Object>>(currentHits.length);
+        ImmutableMap<String, Object> statistics = ImmutableMap.of();
         if (params.doSearch) {
             ImmutableMap<String, Repository> repoMap = repositoryServiceManager.getRepositoryMap(
                 validationService);
@@ -271,6 +282,7 @@ public class SearchServlet extends HttpServlet {
                     SearchFilters.refFilter(params.refNames.split(",")),
                     SearchFilters.projectFilter(params.projectKeys.split(",")),
                     SearchFilters.repositoryFilter(params.repoNames.split(",")),
+                    SearchFilters.extensionFilter(params.extensions.split(",")),
                     SearchFilters.authorFilter(params.authorNames.split(",")),
                     SearchFilters.dateRangeFilter(params.committedAfter, params.committedBefore));
                 FilteredQueryBuilder finalQuery = filteredQuery(query, filter);
@@ -291,6 +303,26 @@ public class SearchServlet extends HttpServlet {
                 }
                 esReq.setTypes(typeArray);
 
+                // Build aggregations if statistics were requested
+                if (params.showStatistics) {
+                    esReq
+                        .addAggregation(cardinality("authorCardinality").field("authoremail.untouched")
+                            .precisionThreshold(1000))
+                        .addAggregation(terms("authorRanking").field("authoremail.untouched")
+                            .size(25))
+                        .addAggregation(percentiles("charcountPercentiles").field("charcount")
+                            .percentiles(PERCENTILES))
+                        .addAggregation(extendedStats("charcountStats").field("charcount"))
+                        .addAggregation(filter("commitCount").filter(typeFilter("commit")))
+                        .addAggregation(cardinality("extensionCardinality").field("extension")
+                            .precisionThreshold(1000))
+                        .addAggregation(terms("extensionRanking").field("extension")
+                            .size(25))
+                        .addAggregation(percentiles("linecountPercentiles").field("linecount")
+                            .percentiles(PERCENTILES))
+                        .addAggregation(extendedStats("linecountStats").field("linecount"));
+                }
+
                 SearchResponse esResp = null;
                 try {
                     esResp = esReq.get();
@@ -310,6 +342,44 @@ public class SearchServlet extends HttpServlet {
                         if (error == null || error.isEmpty()) {
                             error = "Shard failure: " + failure.reason();
                         }
+                    }
+                    Aggregations aggs = esResp.getAggregations();
+                    if (params.showStatistics && aggs != null && !aggs.asList().isEmpty()) {
+                        Cardinality authorCardinality = aggs.get("authorCardinality");
+                        Terms authorRanking = aggs.get("authorRanking");
+                        Percentiles charcountPercentiles = aggs.get("charcountPercentiles");
+                        Filter commitCount = aggs.get("commitCount");
+                        ExtendedStats charcountStats = aggs.get("charcountStats");
+                        Cardinality extensionCardinality = aggs.get("extensionCardinality");
+                        Terms extensionRanking = aggs.get("extensionRanking");
+                        Percentiles linecountPercentiles = aggs.get("linecountPercentiles");
+                        ExtendedStats linecountStats = aggs.get("linecountStats");
+                        statistics = new ImmutableMap.Builder<String, Object>()
+                            .put("authorCardinality", authorCardinality.getValue())
+                            .put("authorRanking", getSoyRankingList(
+                                authorRanking, commitCount.getDocCount()))
+                            .put("charcount", new ImmutableMap.Builder<String, Object>()
+                                .put("average", charcountStats.getAvg())
+                                .put("max", Math.round(charcountStats.getMax()))
+                                .put("min", Math.round(charcountStats.getMin()))
+                                .put("percentiles", getSoyPercentileList(
+                                    charcountPercentiles, PERCENTILES))
+                                .put("sum", Math.round(charcountStats.getSum()))
+                                .build())
+                            .put("commitcount", commitCount.getDocCount())
+                            .put("extensionCardinality", extensionCardinality.getValue())
+                            .put("extensionRanking", getSoyRankingList(
+                                extensionRanking, charcountStats.getCount()))
+                            .put("filecount", charcountStats.getCount())
+                            .put("linecount", new ImmutableMap.Builder<String, Object>()
+                                .put("average", linecountStats.getAvg())
+                                .put("max", Math.round(linecountStats.getMax()))
+                                .put("min", Math.round(linecountStats.getMin()))
+                                .put("percentiles", getSoyPercentileList(
+                                    linecountPercentiles, PERCENTILES))
+                                .put("sum", Math.round(linecountStats.getSum()))
+                                .build())
+                            .build();
                     }
                 }
  
@@ -341,6 +411,7 @@ public class SearchServlet extends HttpServlet {
                 .put("doSearch", params.doSearch)
                 .put("totalHits", totalHits)
                 .put("hitArray", hitArray)
+                .put("statistics", statistics)
                 .put("error", error)
                 .put("fullUri", fullUri)
                 .put("baseUrl", propertiesService.getBaseUrl())
@@ -357,17 +428,56 @@ public class SearchServlet extends HttpServlet {
         }
     }
 
+    // Generates a list of percentile aggregation entries for Soy
+    private static ImmutableList<ImmutableMap<String, Object>> getSoyPercentileList (
+            Percentiles aggregation, double... percentiles) {
+        ImmutableList.Builder<ImmutableMap<String, Object>> builder = ImmutableList.builder();
+        for (double percentile : percentiles) {
+            builder.add(ImmutableMap.<String, Object>of(
+                "percentile", percentile,
+                "value", aggregation.percentile(percentile)));
+        }
+        return builder.build();
+    }
+
+    // Generate a list of ranking aggregation entries for Soy
+    private static ImmutableList<ImmutableMap<String, Object>> getSoyRankingList (
+            Terms aggregation, long totalCount) {
+        ImmutableList.Builder<ImmutableMap<String, Object>> builder = ImmutableList.builder();
+        long otherCount = totalCount;
+        for (Terms.Bucket bucket : aggregation.getBuckets()) {
+            String key = bucket.getKey();
+            long count = bucket.getDocCount();
+            otherCount -= count;
+            builder.add(ImmutableMap.<String, Object>of(
+                "key", key,
+                "count", count,
+                "proportion", ((double) count) / totalCount));
+        }
+        if (otherCount > 0) {
+            builder.add(ImmutableMap.<String, Object>of(
+                "other", true,
+                "key", "Other",
+                "count", otherCount,
+                "proportion", ((double) otherCount / totalCount)));
+        }
+        return builder.build();
+    }
+
+
     // Utility class for parsing and storing search parameters from an http request
     private static class SearchParams {
 
         public final boolean doSearch;
         public final String searchString;
+        public final boolean showStatistics;
         public final boolean searchCode;
         public final boolean searchFilenames;
         public final boolean searchCommits;
         public final String projectKeys;
         public final String repoNames;
         public final String refNames;
+        public final String extensions;
         public final String authorNames;
         public final String committedAfterStr;
         public final String committedBeforeStr;
@@ -376,30 +486,35 @@ public class SearchServlet extends HttpServlet {
         public final ReadableInstant committedBefore;
         public final ImmutableMap<String, Object> soyParams;
 
-        private SearchParams (boolean doSearch, String searchString, boolean searchCode,
-                boolean searchFilenames, boolean searchCommits, String projectKeys,
-                String repoNames, String refNames, String authorNames, int page,
-                String committedAfterStr, String committedBeforeStr, DateTimeZone tz) {
+        private SearchParams (boolean doSearch, String searchString, boolean showStatistics,
+                boolean searchCode, boolean searchFilenames, boolean searchCommits,
+                String projectKeys, String repoNames, String refNames, String extensions,
+                String authorNames, int page, String committedAfterStr, String committedBeforeStr,
+                DateTimeZone tz) {
             this.doSearch = doSearch;
             this.searchString = searchString;
+            this.showStatistics = showStatistics;
             this.searchCode = searchCode;
             this.searchFilenames = searchFilenames;
             this.searchCommits = searchCommits;
             this.projectKeys = projectKeys;
             this.repoNames = repoNames;
             this.refNames = refNames;
+            this.extensions = extensions;
             this.authorNames = authorNames;
             this.page = page;
             this.committedAfterStr = committedAfterStr;
             this.committedBeforeStr = committedBeforeStr;
             ImmutableMap.Builder<String, Object> paramBuilder = new ImmutableMap.Builder<String, Object>()
                 .put("searchString", searchString)
+                .put("showStatistics", showStatistics)
                 .put("searchCode", searchCode)
                 .put("searchFilenames", searchFilenames)
                 .put("searchCommits", searchCommits)
                 .put("projectKeys", projectKeys)
                 .put("repoNames", repoNames)
                 .put("refNames", refNames)
+                .put("extensions", extensions)
                 .put("authorNames", authorNames)
                 .put("committedAfter", committedAfterStr)
                 .put("committedBefore", committedBeforeStr)
@@ -438,6 +553,8 @@ public class SearchServlet extends HttpServlet {
                 searchString = "";
             }
 
+            boolean showStatistics = "true".equals(req.getParameter("showStatistics"));
+
             boolean searchCode = "on".equals(req.getParameter("searchCode"));
             boolean searchFilenames = "on".equals(req.getParameter("searchFilenames"));
             boolean searchCommits = "on".equals(req.getParameter("searchCommits"));
@@ -459,6 +576,11 @@ public class SearchServlet extends HttpServlet {
             String refNames = req.getParameter("refNames");
             if (refNames == null) {
                 refNames = "";
+            }
+
+            String extensions = req.getParameter("extensions");
+            if (extensions == null) {
+                extensions = "";
             }
 
             String authorNames = req.getParameter("authorNames");
@@ -483,9 +605,9 @@ public class SearchServlet extends HttpServlet {
                 page = 0;
             }
 
-            return new SearchParams(doSearch, searchString, searchCode, searchFilenames,
-                searchCommits, projectKeys, repoNames, refNames, authorNames, page,
-                committedAfterStr, committedBeforeStr, tz);
+            return new SearchParams(doSearch, searchString, showStatistics, searchCode,
+                searchFilenames, searchCommits, projectKeys, repoNames, refNames, extensions,
+                authorNames, page, committedAfterStr, committedBeforeStr, tz);
         }
     }
 
