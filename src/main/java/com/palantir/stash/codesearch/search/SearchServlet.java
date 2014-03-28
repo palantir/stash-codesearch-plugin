@@ -16,7 +16,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
-import com.palantir.stash.codesearch.admin.GlobalSettingsManager;
+import com.palantir.stash.codesearch.admin.SettingsManager;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -62,7 +62,7 @@ public class SearchServlet extends HttpServlet {
 
     private final ApplicationPropertiesService propertiesService;
 
-    private final GlobalSettingsManager globalSettingsManager;
+    private final SettingsManager settingsManager;
 
     private final PermissionValidationService validationService;
 
@@ -74,13 +74,13 @@ public class SearchServlet extends HttpServlet {
 
     public SearchServlet (
             ApplicationPropertiesService propertiesService,
-            GlobalSettingsManager globalSettingsManager,
+            SettingsManager settingsManager,
             PermissionValidationService validationService,
             RepositoryServiceManager repositoryServiceManager,
             SoyTemplateRenderer soyTemplateRenderer,
             WebResourceManager resourceManager) {
         this.propertiesService = propertiesService;
-        this.globalSettingsManager = globalSettingsManager;
+        this.settingsManager = settingsManager;
         this.validationService = validationService;
         this.repositoryServiceManager = repositoryServiceManager;
         this.soyTemplateRenderer = soyTemplateRenderer;
@@ -211,7 +211,7 @@ public class SearchServlet extends HttpServlet {
         // Query and parse settings
         SearchParams params = SearchParams.getParams(
             req, DateTimeZone.forTimeZone(propertiesService.getDefaultTimeZone()));
-        GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+        GlobalSettings globalSettings = settingsManager.getGlobalSettings();
         ImmutableSet.Builder<String> noHighlightBuilder = new ImmutableSet.Builder<String>();
         for (String extension : globalSettings.getNoHighlightExtensions().split(",")) {
             extension = extension.trim().toLowerCase();

@@ -29,7 +29,7 @@ public class GlobalSettingsServlet extends HttpServlet {
 
     private final ApplicationPropertiesService propertiesService;
 
-    private final GlobalSettingsManager globalSettingsManager;
+    private final SettingsManager settingsManager;
 
     private final PermissionValidationService validationService;
 
@@ -41,13 +41,13 @@ public class GlobalSettingsServlet extends HttpServlet {
 
     public GlobalSettingsServlet (
             ApplicationPropertiesService propertiesService,
-            GlobalSettingsManager globalSettingsManager,
+            SettingsManager settingsManager,
             PermissionValidationService validationService,
             SearchUpdater searchUpdater,
             SecurityService securityService,
             SoyTemplateRenderer soyTemplateRenderer) {
         this.propertiesService = propertiesService;
-        this.globalSettingsManager = globalSettingsManager;
+        this.settingsManager = settingsManager;
         this.validationService = validationService;
         this.searchUpdater = searchUpdater;
         this.securityService = securityService;
@@ -126,7 +126,7 @@ public class GlobalSettingsServlet extends HttpServlet {
                 .build();
             soyTemplateRenderer.render(resp.getWriter(),
                 "com.palantir.stash.stash-code-search:codesearch-soy",
-                "plugin.page.codesearch.globalSettings",
+                "plugin.page.codesearch.globalSettingsPage",
                 data);
         } catch (Exception e) {
             log.error("Error rendering Soy template", e);
@@ -138,7 +138,7 @@ public class GlobalSettingsServlet extends HttpServlet {
     protected void doGet (HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         if (verifySysAdmin(req, resp)) {
-            renderPage(req, resp, globalSettingsManager.getGlobalSettings(), Collections.emptyList());
+            renderPage(req, resp, settingsManager.getGlobalSettings(), Collections.emptyList());
         }
     }
 
@@ -152,6 +152,14 @@ public class GlobalSettingsServlet extends HttpServlet {
         // Parse arguments
         ArrayList<String> errors = new ArrayList<String>();
         boolean indexingEnabled = "on".equals(req.getParameter("indexingEnabled"));
+        int maxConcurrentIndexing = 0;
+        try {
+            maxConcurrentIndexing = parseInt("Indexing Concurrency Limit",
+                MAX_CONCURRENT_INDEXING_LB, MAX_CONCURRENT_INDEXING_UB,
+                req.getParameter("maxConcurrentIndexing"));
+        } catch (IllegalArgumentException e) {
+            errors.add(e.getMessage());
+        }
         int maxFileSize = 0;
         try {
             maxFileSize = parseInt("Max Filesize", MAX_FILE_SIZE_LB, MAX_FILE_SIZE_UB,
@@ -227,9 +235,10 @@ public class GlobalSettingsServlet extends HttpServlet {
         // Update settings object iff no parse errors
         GlobalSettings settings;
         if (errors.isEmpty()) {
-            settings = globalSettingsManager.setGlobalSettings(indexingEnabled, maxFileSize,
-                searchTimeout, noHighlightExtensions, maxPreviewLines, maxMatchLines, maxFragments,
-                pageSize, commitHashBoost, commitSubjectBoost, commitBodyBoost, fileNameBoost);
+            settings = settingsManager.setGlobalSettings(indexingEnabled,
+                maxConcurrentIndexing, maxFileSize, searchTimeout, noHighlightExtensions,
+                maxPreviewLines, maxMatchLines, maxFragments, pageSize, commitHashBoost,
+                commitSubjectBoost, commitBodyBoost, fileNameBoost);
             // Trigger reindex is requested
             if ("true".equals(req.getParameter("reindex"))) {
                 log.info("User {} submitted an async full reindex", req.getRemoteUser());
@@ -251,7 +260,7 @@ public class GlobalSettingsServlet extends HttpServlet {
                 }).start();
             }
         } else {
-            settings = globalSettingsManager.getGlobalSettings();
+            settings = settingsManager.getGlobalSettings();
         }
 
         renderPage(req, resp, settings, errors);

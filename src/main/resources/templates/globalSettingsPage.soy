@@ -5,8 +5,7 @@
  * @param settings
  * @param errors
  */
-{template .globalSettings}
-
+{template .globalSettingsPage}
 
 <html>
 <meta name="decorator" content="atl.admin">
@@ -48,6 +47,12 @@
                 'isChecked': $settings.indexingEnabled
                 ]] /}
             {param descriptionText: 'Check this box to enable indexing of new source code & commits' /}
+        {/call}
+        {call aui.form.textField}
+            {param id: 'maxConcurrentIndexing' /}
+            {param labelContent: 'Indexing Concurrency Limit' /}
+            {param value: $settings.maxConcurrentIndexing /}
+            {param descriptionText: 'Maximum number of concurrent indexing jobs' /}
         {/call}
         {call aui.form.textField}
             {param id: 'maxFileSize' /}
@@ -134,7 +139,7 @@
 {/call} {/param} {/call}
 
 {literal}<script>
-AJS.$('#search-servlet-global-settings-link').parent().addClass('aui-nav-selected')
+AJS.$('#scs-global-settings-link').parent().addClass('aui-nav-selected')
 AJS.$('#saveAndReindexButton').click(function (event) {
     AJS.$('#reindexHidden').val('true');
 })

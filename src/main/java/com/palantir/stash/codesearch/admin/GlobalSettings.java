@@ -26,6 +26,15 @@ public interface GlobalSettings extends Entity {
     public boolean getIndexingEnabled ();
     public void setIndexingEnabled (boolean value);
 
+    // Maximum number of concurrent indexing operations
+    public static final int MAX_CONCURRENT_INDEXING_DEFAULT = 2;
+    public static final int MAX_CONCURRENT_INDEXING_LB = 1;
+    public static final int MAX_CONCURRENT_INDEXING_UB = 16;
+    @NotNull
+    @Default(MAX_CONCURRENT_INDEXING_DEFAULT + "")
+    public int getMaxConcurrentIndexing ();
+    public void setMaxConcurrentIndexing (int value);
+
     // Maximum file size to index (in bytes)
     public static final int MAX_FILE_SIZE_DEFAULT = 256 * 1024;
     public static final int MAX_FILE_SIZE_LB = 1024;

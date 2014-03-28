@@ -1,0 +1,79 @@
+{namespace plugin.page.codesearch}
+
+/**
+ * Repository settings page template
+ * @param repository
+ * @param settings
+ * @param errors
+ */
+{template .repositorySettingsPage}
+
+<html>
+<meta name="decorator" content="stash.repository.settings">
+<meta name="projectKey" content="{$repository.project.key}">
+<meta name="repositorySlug" content="{$repository.slug}">
+<meta name="activeTab" content="repository-settings-git-ops-panel">
+<head>
+    <title>Stash Codesearch Repository Settings</title>
+</head>
+<body>
+
+{call aui.group.group}
+    {param content}
+        {call aui.group.item}
+            {param content}
+                <h2>Codesearch Repository Settings</h2>
+            {/param}
+        {/call}
+    {/param}
+{/call}
+
+{if $errors.0}
+    {call widget.aui.message.error}
+        {param content}
+            <ul>
+            {foreach $error in $errors}
+                <li>{$error}</li>
+            {/foreach}
+            </ul>
+        {/param}
+    {/call}
+{/if}
+ 
+{call aui.group.group} {param content} {call aui.form.form}
+    {param action: '' /}
+    {param content}
+        {call aui.form.textField}
+            {param id: 'refRegex' /}
+            {param labelContent: 'Refs to index' /}
+            {param value: $settings.refRegex /}
+            {param descriptionText: 'Branches that match this anchored regex will be indexed.' /}
+        {/call}
+        {call aui.form.buttons}
+            {param content}
+                {call aui.form.submit}
+                    {param id: 'saveButton' /}
+                    {param text: 'Save' /}
+                    {param type: 'submit' /}
+                {/call}
+                {call aui.form.submit}
+                    {param id: 'saveAndReindexButton' /}
+                    {param text: 'Save and Reindex' /}
+                    {param type: 'submit' /}
+                {/call}
+                <input type="hidden" name="reindex" id="reindexHidden" value="false">
+            {/param}
+        {/call}
+    {/param}
+{/call} {/param} {/call}
+
+{literal}<script>
+AJS.$('#scs-repository-settings-link').parent().addClass('aui-nav-selected')
+AJS.$('#saveAndReindexButton').click(function (event) {
+    AJS.$('#reindexHidden').val('true');
+})
+</script>{/literal}
+
+</body>
+</html>
+{/template}

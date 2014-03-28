@@ -3,13 +3,16 @@
  */
 
 package com.palantir.stash.codesearch.admin;
+import com.atlassian.stash.repository.Repository;
+import com.palantir.stash.codesearch.updater.SearchUpdater;
 
-public interface GlobalSettingsManager {
+public interface SettingsManager {
 
     GlobalSettings getGlobalSettings ();
 
     GlobalSettings setGlobalSettings (
         boolean indexingEnabled,
+        int maxConcurrentIndexing,
         int maxFileSize,
         int searchTimeout,
         String noHighlightExtensions,
@@ -21,4 +24,13 @@ public interface GlobalSettingsManager {
         double commitSubjectBoost,
         double commitBodyBoost,
         double fileNameBoost);
+
+    RepositorySettings getRepositorySettings (Repository repository);
+
+    RepositorySettings setRepositorySettings (
+        Repository repository,
+        String refRegex);
+
+    void addSearchUpdater (SearchUpdater updater);
+
 }

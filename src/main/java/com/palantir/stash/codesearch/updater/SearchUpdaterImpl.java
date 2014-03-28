@@ -4,8 +4,10 @@ import com.atlassian.stash.repository.*;
 import com.atlassian.stash.scm.git.GitScm;
 import com.google.common.collect.ImmutableMap;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
-import com.palantir.stash.codesearch.admin.GlobalSettingsManager;
+import com.palantir.stash.codesearch.admin.RepositorySettings;
+import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -17,7 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.security.SecureRandom;
+import java.util.regex.PatternSyntaxException;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
@@ -30,13 +32,34 @@ import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
 public class SearchUpdaterImpl implements SearchUpdater {
 
-    private static final int MAX_CONCURRENT_INDEX_JOBS = 4;
+    private static class ResizableSemaphore extends Semaphore {
+        private int curSize = 0;
+        public ResizableSemaphore (int permits) {
+            super(permits);
+            curSize = permits;
+        }
+        public ResizableSemaphore (int permits, boolean fairness) {
+            super(permits, fairness);
+            curSize = permits;
+        }
+        public int getCurSize () {
+            return curSize;
+        }
+        public void resize (int newSize) {
+            if (newSize > curSize) {
+                release(newSize - curSize);
+            } else if (newSize < curSize) {
+                reducePermits(curSize - newSize);
+            }
+            curSize = newSize;
+        }
+    }
 
     private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
 
     private final GitScm gitScm;
 
-    private final GlobalSettingsManager globalSettingsManager;
+    private final SettingsManager settingsManager;
 
     private final RepositoryServiceManager repositoryServiceManager;
 
@@ -57,6 +80,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
     // Between a reindex and alias switching, we need to block all new index requests.
     private final AtomicBoolean jobPoolBlocked;
 
+    private int concurrencyLimit;
+
     /**
      * Why do we use both a semaphore and a thread pool to control execution? Since each indexing
      * job must be locked on its corresponding branch, there could be a bunch of jobs "executing"
@@ -64,27 +89,29 @@ public class SearchUpdaterImpl implements SearchUpdater {
      * the semaphore to control the jobs which are actually running, and we use the thread pool
      * (of a larger capacity) to stage jobs that are waiting on the lock.
      */
-    private final Semaphore semaphore;
+    private final ResizableSemaphore semaphore;
 
     private final ScheduledThreadPoolExecutor jobPool;
 
     public SearchUpdaterImpl (
             GitScm gitScm,
-            GlobalSettingsManager globalSettingsManager,
+            SettingsManager settingsManager,
             RepositoryServiceManager repositoryServiceManager,
             SearchUpdateJobFactory jobFactory) {
         this.gitScm = gitScm;
-        this.globalSettingsManager = globalSettingsManager;
+        this.settingsManager = settingsManager;
         this.repositoryServiceManager = repositoryServiceManager;
         this.jobFactory = jobFactory;
         this.random = new SecureRandom();
         this.runningJobs = new HashSet<SearchUpdateJob>();
         this.isReindexingAll = new AtomicBoolean(false);
         this.jobPoolBlocked = new AtomicBoolean(false);
-        this.semaphore = new Semaphore(MAX_CONCURRENT_INDEX_JOBS, true);
-        this.jobPool = new ScheduledThreadPoolExecutor(MAX_CONCURRENT_INDEX_JOBS * 4);
+        this.concurrencyLimit = GlobalSettings.MAX_CONCURRENT_INDEXING_LB;
+        this.semaphore = new ResizableSemaphore(concurrencyLimit, true);
+        this.jobPool = new ScheduledThreadPoolExecutor(concurrencyLimit * 5);
         initializeAliasedIndex(ES_UPDATEALIAS, false);
         redirectAndDeleteAliasedIndex(ES_SEARCHALIAS, ES_UPDATEALIAS);
+        settingsManager.addSearchUpdater(this);
     }
 
     // Return the name of the index pointed to by an alias (null if no index found)
@@ -362,7 +389,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
             public void run () {
                 acquireLock(job);
                 semaphore.acquireUninterruptibly();
-                final GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+                final GlobalSettings globalSettings = settingsManager.getGlobalSettings();
                 if (!globalSettings.getIndexingEnabled()) {
                     log.warn("Not executing SearchUpdateJob {} since indexing is disabled",
                         job.toString());
@@ -397,6 +424,18 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     private Future submitAsyncUpdateImpl (Repository repository, String ref,
             int delayMs, boolean reindex) {
+        RepositorySettings repositorySettings = settingsManager.getRepositorySettings(repository);
+        String refRegex = repositorySettings.getRefRegex();
+        try {
+            if (!ref.matches(refRegex)) {
+                log.debug("Skipping {}/{}:{} (doesn't match {})",
+                    repository.getProject().getKey(), repository.getSlug(), ref, refRegex);
+                return getFinishedFuture();
+            }
+        } catch (PatternSyntaxException e) {
+            log.error("Ref matcher {} is invalid", refRegex, e);
+            return getFinishedFuture();
+        }
         if (jobPoolBlocked.get()) {
             log.warn("Job pool is currently blocked: not executing update job on {}/{}:{}",
                 repository.getProject().getKey(), repository.getSlug(), ref);
@@ -451,7 +490,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     @Override
     public boolean reindexAll () {
-        GlobalSettings globalSettings = globalSettingsManager.getGlobalSettings();
+        GlobalSettings globalSettings = settingsManager.getGlobalSettings();
         if (!globalSettings.getIndexingEnabled()) {
             log.warn("Not performing a complete reindex triggered since indexing is disabled");
             return false;
@@ -510,6 +549,22 @@ public class SearchUpdaterImpl implements SearchUpdater {
         } finally {
             isReindexingAll.getAndSet(false);
             return true;
+        }
+    }
+
+    @Override
+    public void refreshConcurrencyLimit () {
+        synchronized (semaphore) {
+            int prevConcurrencyLimit = concurrencyLimit;
+            concurrencyLimit = settingsManager.getGlobalSettings().getMaxConcurrentIndexing();
+            if (prevConcurrencyLimit == concurrencyLimit)  {
+                return;
+            }
+            log.warn("Attempting to change concurrency limit from {} to {}",
+                prevConcurrencyLimit, concurrencyLimit);
+            jobPool.setCorePoolSize(concurrencyLimit * 5);
+            jobPool.setMaximumPoolSize(concurrencyLimit * 5);
+            semaphore.resize(concurrencyLimit);
         }
     }
 

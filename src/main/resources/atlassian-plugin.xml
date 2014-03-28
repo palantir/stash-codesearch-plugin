@@ -27,10 +27,11 @@
     <ao key="ao-module">
         <description>Stash Codesearch settings DB</description>
         <entity>com.palantir.stash.codesearch.admin.GlobalSettings</entity>
+        <entity>com.palantir.stash.codesearch.admin.RepositorySettings</entity>
     </ao>
 
-    <component key="global-settings-manager" class="com.palantir.stash.codesearch.admin.GlobalSettingsManagerImpl" public="true">
-        <interface>com.palantir.stash.codesearch.admin.GlobalSettingsManager</interface>
+    <component key="settings-manager" class="com.palantir.stash.codesearch.admin.SettingsManagerImpl" public="true">
+        <interface>com.palantir.stash.codesearch.admin.SettingsManager</interface>
     </component>
 
     <component key="repository-service-manager" class="com.palantir.stash.codesearch.repository.RepositoryServiceManagerImpl" public="true">
@@ -69,10 +70,16 @@
         <link>/plugins/servlet/codesearch/search?projectKeys=${repository.project.key}&amp;repoNames=${repository.slug}</link>
     </web-item>
 
-    <web-item key="search-servlet-global-settings" name="Codesearch Global Settings" section="atl.admin/admin-settings-section" weight="200">
+    <web-item key="global-settings-link" name="Codesearch Global Settings" section="atl.admin/admin-settings-section" weight="200">
         <label>Codesearch Global Settings</label>
-        <link linkId="search-servlet-global-settings-link">/plugins/servlet/codesearch/globalsettings</link>
+        <link linkId="scs-global-settings-link">/plugins/servlet/codesearch/globalsettings</link>
         <tooltip>Configuration options for Stash Codesearch instance.</tooltip>
+    </web-item>
+
+    <web-item key="repository-settings-link" name="Codesearch Repository Settings" weight="20" section="stash.repository.settings.panel">
+        <label>Codesearch Repository Settings</label>
+        <link linkId="scs-repository-settings-link">/plugins/servlet/codesearch/repositorysettings/${repository.project.key}/${repository.slug}</link>
+        <tooltip>Repository configuration options for Stash Codesearch</tooltip>
     </web-item>
 
     <servlet key="search-servlet" class="com.palantir.stash.codesearch.search.SearchServlet">
@@ -83,6 +90,11 @@
     <servlet key="global-settings-servlet" class="com.palantir.stash.codesearch.admin.GlobalSettingsServlet">
         <description key="global-settings-servlet.description">Codesearch Global Settings Servlet</description>
         <url-pattern>/codesearch/globalsettings</url-pattern>
+    </servlet>
+
+    <servlet key="repository-settings-servlet" class="com.palantir.stash.codesearch.admin.RepositorySettingsServlet">
+        <description key="repository-settings-servlet.description">Codesearch Repository Settings Servlet</description>
+        <url-pattern>/codesearch/repositorysettings/*</url-pattern>
     </servlet>
 
 </atlassian-plugin>

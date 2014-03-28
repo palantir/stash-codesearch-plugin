@@ -24,7 +24,7 @@ public class GlobalSettingsServletTest {
     @Mock
     private GlobalSettings gs;
     @Mock
-    private GlobalSettingsManager gsm;
+    private SettingsManager sm;
     @Mock
     private HttpServletRequest req;
     @Mock
@@ -47,11 +47,11 @@ public class GlobalSettingsServletTest {
         MockitoAnnotations.initMocks(this);
 
         Mockito.when(aps.getLoginUri(Mockito.any(URI.class))).thenReturn(URI.create(SOME_URL));
-        Mockito.when(gsm.getGlobalSettings()).thenReturn(gs);
+        Mockito.when(sm.getGlobalSettings()).thenReturn(gs);
         Mockito.when(req.getRequestURL()).thenReturn(new StringBuffer(SOME_URL));
         Mockito.when(res.getWriter()).thenReturn(pw);
 
-        servlet = new GlobalSettingsServlet(aps, gsm, pvs, su, ss, str);
+        servlet = new GlobalSettingsServlet(aps, sm, pvs, su, ss, str);
     }
 
     @Test
@@ -88,7 +88,7 @@ public class GlobalSettingsServletTest {
         Mockito.verify(str).render(
             Mockito.eq(pw),
             Mockito.eq("com.palantir.stash.stash-code-search:codesearch-soy"),
-            Mockito.eq("plugin.page.codesearch.globalSettings"),
+            Mockito.eq("plugin.page.codesearch.globalSettingsPage"),
             mapCaptor.capture());
         Assert.assertEquals(gs, mapCaptor.getValue().get("settings"));
     }
@@ -96,6 +96,7 @@ public class GlobalSettingsServletTest {
     @Test
     public void postTest () throws Exception {
         Mockito.when(req.getParameter("indexingEnabled")).thenReturn("" + GlobalSettings.INDEXING_ENABLED_DEFAULT);
+        Mockito.when(req.getParameter("maxConcurrentIndexing")).thenReturn("" + GlobalSettings.MAX_CONCURRENT_INDEXING_DEFAULT);
         Mockito.when(req.getParameter("maxFileSize")).thenReturn("" + GlobalSettings.MAX_FILE_SIZE_DEFAULT);
         Mockito.when(req.getParameter("searchTimeout")).thenReturn("" + GlobalSettings.SEARCH_TIMEOUT_DEFAULT);
         Mockito.when(req.getParameter("noHighlightExtensions")).thenReturn("" + GlobalSettings.NO_HIGHLIGHT_EXTENSIONS_DEFAULT);
@@ -110,8 +111,9 @@ public class GlobalSettingsServletTest {
 
         servlet.doPost(req, res);
 
-        Mockito.verify(gsm).setGlobalSettings(
+        Mockito.verify(sm).setGlobalSettings(
             Mockito.eq(GlobalSettings.INDEXING_ENABLED_DEFAULT),
+            Mockito.eq(GlobalSettings.MAX_CONCURRENT_INDEXING_DEFAULT),
             Mockito.eq(GlobalSettings.MAX_FILE_SIZE_DEFAULT),
             Mockito.eq(GlobalSettings.SEARCH_TIMEOUT_DEFAULT),
             Mockito.eq(GlobalSettings.NO_HIGHLIGHT_EXTENSIONS_DEFAULT),

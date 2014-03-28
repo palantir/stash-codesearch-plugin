@@ -42,4 +42,9 @@ public interface SearchUpdater {
      */
     boolean reindexAll ();
 
+    /**
+     * Refresh the maximum number of concurrent indexing jobs based on the global settings manager.
+     */
+    void refreshConcurrencyLimit ();
+
 }

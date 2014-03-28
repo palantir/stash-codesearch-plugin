@@ -328,8 +328,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 prevHash, newHash, e);
             return;
         }
-        //TODO: warn ==> debug
-        log.warn("{} update: adding {} files", refDesc, filesToAdd.size());
+        log.debug("{} update: adding {} files", refDesc, filesToAdd.size());
 
         // Add new blob/path pairs. We use another bulk request here to cut down on the number of
         // cat-files we need to perform -- if a blob already exists in the ES cluster, we can
@@ -362,7 +361,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 log.warn("file-ref update failed, performing upserts for all changes", e);
             }
         }
-        log.warn("{} update: {} files to upsert", refDesc, filesToAdd.size());
+        log.debug("{} update: {} files to upsert", refDesc, filesToAdd.size());
 
         // Process all changes w/o corresponding documents
         if (!filesToAdd.isEmpty()) {
@@ -527,7 +526,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
             }
         }
 
-        log.warn("{} update: adding {} commits, deleting {} commits",
+        log.debug("{} update: adding {} commits, deleting {} commits",
             refDesc, commitsAdded, commitsDeleted);
 
         // Write remaining requests and wait for completion
