@@ -219,6 +219,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_UPDATEALIAS)
                     .setSize(1000)
                     .setFetchSource(false)
+                    .setRouting(getRepoDesc())
                     .setQuery(filteredQuery(matchAllQuery(), andFilter(
                         projectRepositoryFilter(
                             repository.getProject().getKey(), repository.getSlug()),
