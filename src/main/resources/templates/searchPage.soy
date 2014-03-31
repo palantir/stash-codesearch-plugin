@@ -260,15 +260,39 @@
 // Pagination
 {if $doSearch and $totalHits > 0 and not $error}
 <div class="paging-row">
-    Page:
-    {for $i in range($pages)}
-        <span class="pageno"> &nbsp;&nbsp;
-        {if $i == $currentPage}
-            <b>{$i + 1}</b>
-        {else}
-            <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+    <span>Page: </span>
+    {for $i in range(0, 3)}
+        {if $i < $pages}
+            <span class="pageno"> &nbsp;&nbsp;
+            {if $i == $currentPage}
+                <b>{$i + 1}</b>
+            {else}
+                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+            {/if}
+            </span>
         {/if}
-        </span>
+    {/for}
+    {for $i in range($currentPage - 2, $currentPage + 3)}
+        {if $i >= 3 and $i < $pages - 3}
+            <span class="pageno"> &nbsp;&nbsp;
+            {if $i == $currentPage}
+                <b>{$i + 1}</b>
+            {else}
+                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+            {/if}
+            </span>
+        {/if}
+    {/for}
+    {for $i in range($pages - 3, $pages)}
+        {if $i >= 3}
+            <span class="pageno"> &nbsp;&nbsp;
+            {if $i == $currentPage}
+                <b>{$i + 1}</b>
+            {else}
+                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+            {/if}
+            </span>
+        {/if}
     {/for}
 </div>
 {elseif $doSearch}

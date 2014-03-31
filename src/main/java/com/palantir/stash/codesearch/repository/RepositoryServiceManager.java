@@ -18,4 +18,8 @@ public interface RepositoryServiceManager {
     // Returns map of ref name to branch object
     ImmutableMap<String, Branch> getBranchMap (Repository repository);
 
+    RepositoryService getRepositoryService ();
+
+    RepositoryMetadataService getRepositoryMetadataService ();
+
 }

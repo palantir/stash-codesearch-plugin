@@ -21,7 +21,7 @@ public interface RepositorySettings extends Entity {
     public void setRepositoryId (String value);
 
     // Regex for selecting refs to index
-    public static final String REF_REGEX_DEFAULT = "refs/heads/(master|develop)";
+    public static final String REF_REGEX_DEFAULT = "HEAD|(refs/heads/(master|develop))";
     @NotNull
     @Default(REF_REGEX_DEFAULT)
     public String getRefRegex ();

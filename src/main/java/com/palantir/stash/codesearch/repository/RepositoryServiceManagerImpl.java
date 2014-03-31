@@ -73,4 +73,14 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
         return branchMap.build();
     }
 
+    @Override
+    public RepositoryService getRepositoryService () {
+        return repositoryService;
+    }
+
+    @Override
+    public RepositoryMetadataService getRepositoryMetadataService () {
+        return repositoryMetadataService;
+    }
+
 }

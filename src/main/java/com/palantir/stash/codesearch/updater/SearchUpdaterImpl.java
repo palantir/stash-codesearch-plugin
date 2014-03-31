@@ -427,7 +427,12 @@ public class SearchUpdaterImpl implements SearchUpdater {
         RepositorySettings repositorySettings = settingsManager.getRepositorySettings(repository);
         String refRegex = repositorySettings.getRefRegex();
         try {
-            if (!ref.matches(refRegex)) {
+            Branch defaultBranch = repositoryServiceManager.getRepositoryMetadataService()
+                .getDefaultBranch(repository);
+            if (!ref.matches(refRegex) &&
+                    (defaultBranch == null ||
+                     !ref.equals(defaultBranch.getId()) ||
+                     !"HEAD".matches(refRegex))) {
                 log.debug("Skipping {}/{}:{} (doesn't match {})",
                     repository.getProject().getKey(), repository.getSlug(), ref, refRegex);
                 return getFinishedFuture();
