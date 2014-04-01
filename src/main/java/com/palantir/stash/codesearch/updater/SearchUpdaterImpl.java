@@ -389,13 +389,13 @@ public class SearchUpdaterImpl implements SearchUpdater {
             public void run () {
                 acquireLock(job);
                 semaphore.acquireUninterruptibly();
-                final GlobalSettings globalSettings = settingsManager.getGlobalSettings();
-                if (!globalSettings.getIndexingEnabled()) {
-                    log.warn("Not executing SearchUpdateJob {} since indexing is disabled",
-                        job.toString());
-                    return;
-                }
                 try {
+                    final GlobalSettings globalSettings = settingsManager.getGlobalSettings();
+                    if (!globalSettings.getIndexingEnabled()) {
+                        log.warn("Not executing SearchUpdateJob {} since indexing is disabled",
+                            job.toString());
+                        return;
+                    }
                     if (reindex) {
                         job.doReindex(gitScm, globalSettings);
                     } else {
