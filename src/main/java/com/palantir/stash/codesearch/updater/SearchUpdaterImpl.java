@@ -7,6 +7,7 @@ import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.RepositorySettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
+import com.palantir.stash.codesearch.search.SearchFilters;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -24,6 +26,7 @@ import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +81,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
     private final AtomicBoolean isReindexingAll;
 
     // Between a reindex and alias switching, we need to block all new index requests.
-    private final AtomicBoolean jobPoolBlocked;
+    private final AtomicInteger jobPoolBlocked;
 
     private int concurrencyLimit;
 
@@ -105,7 +108,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
         this.random = new SecureRandom();
         this.runningJobs = new HashSet<SearchUpdateJob>();
         this.isReindexingAll = new AtomicBoolean(false);
-        this.jobPoolBlocked = new AtomicBoolean(false);
+        this.jobPoolBlocked = new AtomicInteger(0);
         this.concurrencyLimit = GlobalSettings.MAX_CONCURRENT_INDEXING_LB;
         this.semaphore = new ResizableSemaphore(concurrencyLimit, true);
         this.jobPool = new ScheduledThreadPoolExecutor(concurrencyLimit * 5);
@@ -441,7 +444,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
             log.error("Ref matcher {} is invalid", refRegex, e);
             return getFinishedFuture();
         }
-        if (jobPoolBlocked.get()) {
+        if (jobPoolBlocked.get() > 0) {
             log.warn("Job pool is currently blocked: not executing update job on {}/{}:{}",
                 repository.getProject().getKey(), repository.getSlug(), ref);
             return getFinishedFuture();
@@ -493,11 +496,72 @@ public class SearchUpdaterImpl implements SearchUpdater {
         submitUpdateImpl(repository, ref, delayMs, true);
     }
 
+    private void runWithBlockedJobPool (Runnable runnable) {
+        jobPoolBlocked.incrementAndGet();
+        try {
+            int zeroJobIntervals = 0;
+            while (zeroJobIntervals < 5) {
+                if (jobPool.getCompletedTaskCount() >= jobPool.getTaskCount()) {
+                    ++zeroJobIntervals;
+                } else {
+                    zeroJobIntervals = 0;
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    log.warn("Caught error while trying to sleep", e);
+                }
+            }
+            runnable.run();
+        } finally {
+            jobPoolBlocked.decrementAndGet();
+        }
+    }
+
+    @Override
+    public boolean reindexRepository (final String projectKey, final String repositorySlug) {
+        GlobalSettings globalSettings = settingsManager.getGlobalSettings();
+        if (!globalSettings.getIndexingEnabled()) {
+            log.warn("Not performing a repository reindex triggered since indexing is disabled");
+            return false;
+        }
+
+        // Delete documents for this repository
+        runWithBlockedJobPool(new Runnable() {
+            @Override public void run () {
+                ES_CLIENT.prepareDeleteByQuery(ES_UPDATEALIAS)
+                    .setRouting(projectKey + '^' + repositorySlug)
+                    .setQuery(QueryBuilders.filteredQuery(
+                        QueryBuilders.matchAllQuery(),
+                        SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
+                    .get();
+            }
+        });
+
+        // Search for repository
+        Repository repository = repositoryServiceManager.getRepositoryService().findBySlug(
+            projectKey, repositorySlug);
+        if (repository == null) {
+            return false;
+        }
+
+        // Submit and wait for each job
+        List<Future> futures = new ArrayList<Future>();
+        for (Branch branch : repositoryServiceManager.getBranchMap(repository).values()) {
+            // No need to explicitly trigger reindex, since index is empty.
+            futures.add(submitAsyncUpdate(repository, branch.getId(), 0));
+        }
+        for (Future future : futures) {
+            waitForFuture(future);
+        }
+        return true;
+    }
+
     @Override
     public boolean reindexAll () {
         GlobalSettings globalSettings = settingsManager.getGlobalSettings();
         if (!globalSettings.getIndexingEnabled()) {
-            log.warn("Not performing a complete reindex triggered since indexing is disabled");
+            log.warn("Not performing a complete reindex since indexing is disabled");
             return false;
         }
         if (!isReindexingAll.compareAndSet(false, true)) {
@@ -505,26 +569,11 @@ public class SearchUpdaterImpl implements SearchUpdater {
             return false;
         }
         try {
-            // Wait for job pool to clear out
-            jobPoolBlocked.set(true);
-            try {
-                int zeroJobIntervals = 0;
-                while (zeroJobIntervals < 5) {
-                    if (jobPool.getCompletedTaskCount() >= jobPool.getTaskCount()) {
-                        ++zeroJobIntervals;
-                    } else {
-                        zeroJobIntervals = 0;
-                    }
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        log.warn("Caught error while trying to sleep", e);
-                    }
+            runWithBlockedJobPool(new Runnable() {
+                @Override public void run () {
+                    initializeAliasedIndex(ES_UPDATEALIAS, true);
                 }
-                initializeAliasedIndex(ES_UPDATEALIAS, true);
-            } finally {
-                jobPoolBlocked.set(false);
-            }
+            });
 
             // Disable refresh for faster bulk indexing
             ES_CLIENT.admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)

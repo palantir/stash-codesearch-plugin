@@ -134,7 +134,7 @@ public class RepositorySettingsServlet extends HttpServlet {
         if (!verifyLoggedIn(req, resp)) {
             return;
         }
-        Repository repository = getRepository(req);
+        final Repository repository = getRepository(req);
         if (repository == null) {
             resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Repo not found.");
             return;
@@ -156,6 +156,29 @@ public class RepositorySettingsServlet extends HttpServlet {
         RepositorySettings settings;
         if (errors.isEmpty()) {
             settings = settingsManager.setRepositorySettings(repository, refRegex);
+            if ("true".equals(req.getParameter("reindex"))) {
+                // Reindex is requested
+                log.info("User {} submitted an async reindex for {}^{}",
+                    req.getRemoteUser(), repository.getProject().getKey(), repository.getSlug());
+                new Thread(new Runnable() {
+                    @Override public void run () {
+                        try {
+                            securityService.doWithPermission("reindex by repo admin",
+                                Permission.REPO_ADMIN, new Operation<Void, Exception>() {
+                                    @Override public Void perform () {
+                                        searchUpdater.reindexRepository(
+                                            repository.getProject().getKey(), repository.getSlug());
+                                        return null;
+                                    }
+                                }
+                            );
+                        } catch (Exception e) {
+                            log.warn("Caught exception while reindexing", e);
+                        }
+                    }
+                }).start();
+            }
+
         } else {
             settings = settingsManager.getRepositorySettings(repository);
         }

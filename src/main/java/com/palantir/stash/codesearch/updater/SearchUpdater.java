@@ -36,6 +36,12 @@ public interface SearchUpdater {
     void submitReindex (Repository repository, String ref, int delayMs);
 
     /**
+     * Triggers a full reindex of all branches in a repository. Returns false if a full index is
+     * already running. Blocks until the reindex job has completed.
+     */
+    boolean reindexRepository (String projectKey, String repositorySlug);
+
+    /**
      * Triggers a full reindex of all branches. Implementations should perform ailasing to ensure
      * availability during the reindex. Returns false if a full reindex is already running.
      * Blocks until the reindex job has completed.
