@@ -388,7 +388,13 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 int count = 0;
                 int maxFileSize = globalSettings.getMaxFileSize();
                 for (SimpleEntry<String, String> bppair : filesToAddCopy) {
-                    int fs = Integer.parseInt(catFileMetadata[count].split("\\s")[2]);
+                    int fs;
+                    try {
+                        fs = Integer.parseInt(catFileMetadata[count].split("\\s")[2]);
+                    } catch (Exception e) {
+                        fs = Integer.MAX_VALUE;
+                    }
+
                     if (fs > maxFileSize) {
                         filesToAdd.remove(bppair);
                     } else {
