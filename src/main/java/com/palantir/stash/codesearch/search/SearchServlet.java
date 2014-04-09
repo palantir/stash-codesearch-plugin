@@ -278,12 +278,14 @@ public class SearchServlet extends HttpServlet {
                     query = queryStringQuery;
                 }
                 FilterBuilder filter = andFilter(
-                    SearchFilters.aclFilter(repoMap),
-                    SearchFilters.refFilter(params.refNames.split(",")),
-                    SearchFilters.projectFilter(params.projectKeys.split(",")),
-                    SearchFilters.repositoryFilter(params.repoNames.split(",")),
-                    SearchFilters.extensionFilter(params.extensions.split(",")),
-                    SearchFilters.authorFilter(params.authorNames.split(",")),
+                    boolFilter().must(
+                        SearchFilters.aclFilter(repoMap),
+                        SearchFilters.refFilter(params.refNames.split(",")),
+                        SearchFilters.projectFilter(params.projectKeys.split(",")),
+                        SearchFilters.repositoryFilter(params.repoNames.split(",")),
+                        SearchFilters.extensionFilter(params.extensions.split(",")),
+                        SearchFilters.authorFilter(params.authorNames.split(","))
+                    ),
                     SearchFilters.dateRangeFilter(params.committedAfter, params.committedBefore));
                 FilteredQueryBuilder finalQuery = filteredQuery(query, filter);
                 esReq.setQuery(finalQuery)

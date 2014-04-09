@@ -37,16 +37,16 @@ public class SearchFilters {
     }
 
     public static FilterBuilder projectRepositoryFilter (String project, String repository) {
-        return andFilter(
-            termFilter("project", project),
-            termFilter("repository", repository))
+        return boolFilter()
+            .must(termFilter("project", project))
+            .must(termFilter("repository", repository))
             .cache(true)
             .cacheKey("CACHE^PROJECTREPOFILTER^" + project + "^" + repository);
     }
 
     public static FilterBuilder aclFilter (Map<String, Repository> repoMap) {
         if (repoMap.isEmpty()) {
-            return notFilter(matchAllFilter());
+            return boolFilter().mustNot(matchAllFilter());
         }
 
         // Compute cryptographic hash of repository set to use for cache key
@@ -65,8 +65,8 @@ public class SearchFilters {
             log.error("Caught exception generating ACL hash -- caching is disabled.", e);
         }
 
-        // Create OrFilter of individual repo ACL filters
-        OrFilterBuilder filter = orFilter();
+        // Create disjunction of individual repo ACL filters
+        BoolFilterBuilder filter = boolFilter();
         if (filterHash != null) {
             filter.cache(true)
                 .cacheKey("CACHE^ACLORFILTER^" + filterHash);
@@ -74,7 +74,7 @@ public class SearchFilters {
             filter.cache(false);
         }
         for (Repository repo : repoMap.values()) {
-            filter.add(projectRepositoryFilter(repo.getProject().getKey(), repo.getSlug()));
+            filter.should(projectRepositoryFilter(repo.getProject().getKey(), repo.getSlug()));
         }
         return filter;
     }
@@ -85,7 +85,7 @@ public class SearchFilters {
 
     public static FilterBuilder refFilter (Iterable<String> refs) {
         boolean filterAdded = false;
-        OrFilterBuilder filter = orFilter();
+        BoolFilterBuilder filter = boolFilter();
         for (String ref : refs) {
             String[] toks = ref.split("[/\\s]+");
             // Make sure there's at least one non-empty token
@@ -100,15 +100,15 @@ public class SearchFilters {
                 continue;
             }
 
-            AndFilterBuilder refFilter = andFilter()
+            BoolFilterBuilder refFilter = boolFilter()
                 .cache(true)
                 .cacheKey("CACHE^REFANDFILTER^" + ref);
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
-                    refFilter.add(termFilter("refs", tok.toLowerCase()));
+                    refFilter.must(termFilter("refs", tok.toLowerCase()));
                 }
             }
-            filter.add(refFilter);
+            filter.should(refFilter);
             filterAdded = true;
         }
         return filterAdded ? filter : matchAllFilter();
@@ -120,13 +120,13 @@ public class SearchFilters {
 
     public static FilterBuilder projectFilter (Iterable<String> projects) {
         boolean filterAdded = false;
-        OrFilterBuilder filter = orFilter();
+        BoolFilterBuilder filter = boolFilter();
         for (String project : projects) {
             project = project.trim();
             if (project.isEmpty()) {
                 continue;
             }
-            filter.add(termFilter("project", project)
+            filter.should(termFilter("project", project)
                 .cache(true)
                 .cacheKey("CACHE^PROJECTFILTER^" + project));
             filterAdded = true;
@@ -140,13 +140,13 @@ public class SearchFilters {
 
     public static FilterBuilder repositoryFilter (Iterable<String> repositories) {
         boolean filterAdded = false;
-        OrFilterBuilder filter = orFilter();
+        BoolFilterBuilder filter = boolFilter();
         for (String repository : repositories) {
             repository = repository.trim();
             if (repository.isEmpty()) {
                 continue;
             }
-            filter.add(termFilter("repository", repository)
+            filter.should(termFilter("repository", repository)
                 .cache(true)
                 .cacheKey("CACHE^REPOFILTER^" + repository));
             filterAdded = true;
@@ -160,18 +160,18 @@ public class SearchFilters {
 
     public static FilterBuilder extensionFilter (Iterable<String> extensions) {
         boolean filterAdded = false;
-        OrFilterBuilder filter = orFilter();
+        BoolFilterBuilder filter = boolFilter();
         for (String extension : extensions) {
             extension = extension.trim();
             if (extension.isEmpty()) {
                 continue;
             }
-            filter.add(termFilter("extension", extension)
+            filter.should(termFilter("extension", extension)
                 .cache(true)
                 .cacheKey("CACHE^EXTENSIONFILTER^" + extension));
             filterAdded = true;
         }
-        return filterAdded ? filter.add(typeFilter("commit")) : matchAllFilter();
+        return filterAdded ? filter.should(typeFilter("commit")) : matchAllFilter();
     }
 
     public static FilterBuilder authorFilter (String[] authors) {
@@ -180,7 +180,7 @@ public class SearchFilters {
 
     public static FilterBuilder authorFilter (Iterable<String> authors) {
         boolean filterAdded = false;
-        OrFilterBuilder filter = orFilter();
+        BoolFilterBuilder filter = boolFilter();
         for (String author : authors) {
             String[] toks = author.split("\\W+");
             boolean emptyTokens = true;
@@ -195,29 +195,25 @@ public class SearchFilters {
             }
 
             // Name filters
-            AndFilterBuilder nameFilter = andFilter()
-                .cache(true)
-                .cacheKey("CACHE^AUTHORNAMEANDFILTER^" + author);
+            BoolFilterBuilder nameFilter = boolFilter();
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
-                    nameFilter.add(termFilter("commit.authorname", tok.toLowerCase()));
+                    nameFilter.must(termFilter("commit.authorname", tok.toLowerCase()));
                 }
             }
-            filter.add(nameFilter);
+            filter.should(nameFilter);
 
             // Email filters
-            AndFilterBuilder emailFilter = andFilter()
-                .cache(true)
-                .cacheKey("CACHE^AUTHOREMAILANDFILTER^" + author);
+            BoolFilterBuilder emailFilter = boolFilter();
             for (String tok : toks) {
                 if (!tok.isEmpty()) {
-                    emailFilter.add(termFilter("commit.authoremail", tok.toLowerCase()));
+                    emailFilter.must(termFilter("commit.authoremail", tok.toLowerCase()));
                 }
             }
-            filter.add(emailFilter);
+            filter.should(emailFilter);
             filterAdded = true;
         }
-        return filterAdded ? filter.add(typeFilter("file")) : matchAllFilter();
+        return filterAdded ? filter.should(typeFilter("file")) : matchAllFilter();
     }
 
     public static FilterBuilder dateRangeFilter (ReadableInstant from, ReadableInstant to) {
