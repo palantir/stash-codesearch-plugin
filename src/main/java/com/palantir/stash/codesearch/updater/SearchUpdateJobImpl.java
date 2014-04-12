@@ -102,7 +102,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 return hash;
             }
         } catch (Exception e) {
-            log.warn("Caught error getting the latest indexed commit for {}, returning EMPTY_TREE",
+            log.info("Caught error getting the latest indexed commit for {}, returning EMPTY_TREE",
                 toString(), e);
         }
         return EMPTY_TREE;
@@ -113,7 +113,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         try {
             ES_CLIENT.prepareDelete(ES_UPDATEALIAS, "latestindexed", toString()).get();
         } catch (Exception e) {
-            log.error("Caught error deleting the latest indexed commit note for {} from the index",
+            log.warn("Caught error deleting the latest indexed commit note for {} from the index",
                 toString(), e);
             return false;
         }
