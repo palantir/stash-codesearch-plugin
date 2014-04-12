@@ -433,11 +433,15 @@ public class SearchUpdaterImpl implements SearchUpdater {
         RepositorySettings repositorySettings = settingsManager.getRepositorySettings(repository);
         String refRegex = repositorySettings.getRefRegex();
         try {
-            Branch defaultBranch = repositoryServiceManager.getRepositoryMetadataService()
-                .getDefaultBranch(repository);
+            String defaultBranch = null;
+            try {
+                defaultBranch = repositoryServiceManager.getRepositoryMetadataService()
+                    .getDefaultBranch(repository)
+                    .getId();
+            } catch (Exception e) {} // No default branch
             if (!ref.matches(refRegex) &&
                     (defaultBranch == null ||
-                     !ref.equals(defaultBranch.getId()) ||
+                     !ref.equals(defaultBranch) ||
                      !"HEAD".matches(refRegex))) {
                 log.debug("Skipping {}/{}:{} (doesn't match {})",
                     repository.getProject().getKey(), repository.getSlug(), ref, refRegex);
