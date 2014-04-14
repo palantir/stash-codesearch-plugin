@@ -115,7 +115,7 @@ public class SearchServlet extends HttpServlet {
     // Returns map view of search hits for soy templates
     private ImmutableMap<String, Object> searchHitToDataMap (
             SearchHit hit,
-            Map<String, Repository> repoMap,
+            Map<String, Repository> repoMap,  // null iff no permission validation required
             int maxPreviewLines,
             int maxMatchLines,
             ImmutableSet<String> noHighlight) {
@@ -133,11 +133,21 @@ public class SearchServlet extends HttpServlet {
 
         // Validate permissions & build hit data map
         String repoId = project + "^" + repository;
-        Repository repoObject = repoMap.get(repoId);
-        if (repoObject != null &&
+        boolean hasPermissions;
+        Repository repoObject;
+        if (repoMap == null) {  // current user is system administrator
+            repoObject = repositoryServiceManager.getRepositoryService().findBySlug(
+                project, repository);
+            hasPermissions = true;
+        } else {  // must validate against allowed repositories for non-administrators
+            repoObject = repoMap.get(repoId);
+            hasPermissions = (
+                repoObject != null &&
                 repoObject.getProject().getKey().equals(project) &&
-                repoObject.getSlug().equals(repository)) {
+                repoObject.getSlug().equals(repository));
+        }
 
+        if (hasPermissions) {
             // Generate refs array
             ImmutableSortedSet<String> refSet;
             try {
@@ -245,11 +255,19 @@ public class SearchServlet extends HttpServlet {
             new ArrayList<ImmutableMap<String, Object>>(currentHits.length);
         ImmutableMap<String, Object> statistics = ImmutableMap.of();
         if (params.doSearch) {
-            ImmutableMap<String, Repository> repoMap = repositoryServiceManager.getRepositoryMap(
-                validationService);
-            if (repoMap.isEmpty()) {
-                error = "You do not have permissions to access any repositories";
+            // Repo map is null iff user is a system administrator (don't need to validate permissions).
+            ImmutableMap<String, Repository> repoMap;
+            try {
+                validationService.validateForGlobal(Permission.SYS_ADMIN);
+                repoMap = null;
+            } catch (AuthorisationException e) {
+                repoMap = repositoryServiceManager.getRepositoryMap(
+                    validationService);
+                if (repoMap.isEmpty()) {
+                    error = "You do not have permissions to access any repositories";
+                }
             }
+
             int startIndex = params.page * pageSize;
             SearchRequestBuilder esReq = es.getClient().prepareSearch(ES_SEARCHALIAS)
                 .setFrom(startIndex)
@@ -284,7 +302,7 @@ public class SearchServlet extends HttpServlet {
                 }
                 FilterBuilder filter = andFilter(
                     boolFilter().must(
-                        SearchFilters.aclFilter(repoMap),
+                        repoMap == null ? matchAllFilter() : SearchFilters.aclFilter(repoMap),
                         SearchFilters.refFilter(params.refNames.split(",")),
                         SearchFilters.projectFilter(params.projectKeys.split(",")),
                         SearchFilters.repositoryFilter(params.repoNames.split(",")),
