@@ -14,9 +14,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
-import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
+import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -62,6 +63,8 @@ public class SearchServlet extends HttpServlet {
 
     private final ApplicationPropertiesService propertiesService;
 
+    private final ElasticSearch es;
+
     private final SettingsManager settingsManager;
 
     private final PermissionValidationService validationService;
@@ -74,12 +77,14 @@ public class SearchServlet extends HttpServlet {
 
     public SearchServlet (
             ApplicationPropertiesService propertiesService,
+            ElasticSearch es,
             SettingsManager settingsManager,
             PermissionValidationService validationService,
             RepositoryServiceManager repositoryServiceManager,
             SoyTemplateRenderer soyTemplateRenderer,
             WebResourceManager resourceManager) {
         this.propertiesService = propertiesService;
+        this.es = es;
         this.settingsManager = settingsManager;
         this.validationService = validationService;
         this.repositoryServiceManager = repositoryServiceManager;
@@ -246,7 +251,7 @@ public class SearchServlet extends HttpServlet {
                 error = "You do not have permissions to access any repositories";
             }
             int startIndex = params.page * pageSize;
-            SearchRequestBuilder esReq = ES_CLIENT.prepareSearch(ES_SEARCHALIAS)
+            SearchRequestBuilder esReq = es.getClient().prepareSearch(ES_SEARCHALIAS)
                 .setFrom(startIndex)
                 .setSize(pageSize)
                 .setTimeout(searchTimeout)

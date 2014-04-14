@@ -30,6 +30,10 @@
         <entity>com.palantir.stash.codesearch.admin.RepositorySettings</entity>
     </ao>
 
+    <component key="es" class="com.palantir.stash.codesearch.elasticsearch.ElasticSearchImpl" public="true">
+        <interface>com.palantir.stash.codesearch.elasticsearch.ElasticSearch</interface>
+    </component>
+
     <component key="settings-manager" class="com.palantir.stash.codesearch.admin.SettingsManagerImpl" public="true">
         <interface>com.palantir.stash.codesearch.admin.SettingsManager</interface>
     </component>

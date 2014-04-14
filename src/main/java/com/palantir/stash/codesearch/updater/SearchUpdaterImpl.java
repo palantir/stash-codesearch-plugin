@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableMap;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.RepositorySettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
+import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 import com.palantir.stash.codesearch.search.SearchFilters;
 import java.security.SecureRandom;
@@ -60,6 +61,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
 
+    private final ElasticSearch es;
+
     private final GitScm gitScm;
 
     private final SettingsManager settingsManager;
@@ -97,10 +100,12 @@ public class SearchUpdaterImpl implements SearchUpdater {
     private final ScheduledThreadPoolExecutor jobPool;
 
     public SearchUpdaterImpl (
+            ElasticSearch es,
             GitScm gitScm,
             SettingsManager settingsManager,
             RepositoryServiceManager repositoryServiceManager,
             SearchUpdateJobFactory jobFactory) {
+        this.es = es;
         this.gitScm = gitScm;
         this.settingsManager = settingsManager;
         this.repositoryServiceManager = repositoryServiceManager;
@@ -120,7 +125,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
     // Return the name of the index pointed to by an alias (null if no index found)
     private String getIndexFromAlias (String alias) {
         ImmutableOpenMap<String, List<AliasMetaData>> aliasMap =
-            ES_CLIENT.admin().indices().prepareGetAliases(alias).get().getAliases();
+            es.getClient().admin().indices().prepareGetAliases(alias).get().getAliases();
         for (String index : aliasMap.keys().toArray(String.class)) {
             for (AliasMetaData aliasEntry : aliasMap.get(index)) {
                 if (aliasEntry.getAlias().equals(alias)) {
@@ -144,7 +149,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
         String newIndex = random.nextLong() + "-" + System.nanoTime();
         try {
-            ES_CLIENT.admin().indices().prepareCreate(newIndex)
+            es.getClient().admin().indices().prepareCreate(newIndex)
                 // Latest indexed note schema
                 .addMapping("latestindexed",
                     jsonBuilder().startObject()
@@ -322,7 +327,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
         }
 
         // Perform alias switch
-        IndicesAliasesRequestBuilder aliasBuilder = ES_CLIENT.admin().indices().prepareAliases();
+        IndicesAliasesRequestBuilder aliasBuilder = es.getClient().admin().indices().prepareAliases();
         if (prevIndex != null) {
             aliasBuilder.removeAlias(prevIndex, alias);
         }
@@ -350,7 +355,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
         }
 
         // Perform alias switch
-        IndicesAliasesRequestBuilder builder = ES_CLIENT.admin().indices().prepareAliases();
+        IndicesAliasesRequestBuilder builder = es.getClient().admin().indices().prepareAliases();
         if (fromIndex != null) {
             builder.removeAlias(fromIndex, fromAlias);
         }
@@ -358,7 +363,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
 
         // Delete old index
         if (fromIndex != null) {
-            ES_CLIENT.admin().indices().prepareDelete(fromIndex).get();
+            es.getClient().admin().indices().prepareDelete(fromIndex).get();
         }
 
         return true;
@@ -403,9 +408,9 @@ public class SearchUpdaterImpl implements SearchUpdater {
                         return;
                     }
                     if (reindex) {
-                        job.doReindex(gitScm, globalSettings);
+                        job.doReindex(es.getClient(), gitScm, globalSettings);
                     } else {
-                        job.doUpdate(gitScm, globalSettings);
+                        job.doUpdate(es.getClient(), gitScm, globalSettings);
                     }
                 } catch (Throwable e) {
                     log.error("Unexpected error while updating index for {}", job.toString(), e);
@@ -536,7 +541,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
         // Delete documents for this repository
         runWithBlockedJobPool(new Runnable() {
             @Override public void run () {
-                ES_CLIENT.prepareDeleteByQuery(ES_UPDATEALIAS)
+                es.getClient().prepareDeleteByQuery(ES_UPDATEALIAS)
                     .setRouting(projectKey + '^' + repositorySlug)
                     .setQuery(QueryBuilders.filteredQuery(
                         QueryBuilders.matchAllQuery(),
@@ -583,7 +588,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
             });
 
             // Disable refresh for faster bulk indexing
-            ES_CLIENT.admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
+            es.getClient().admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
                 .setSettings(ImmutableSettings.builder()
                     .put("index.refresh_interval", "-1"))
                 .get();
@@ -601,11 +606,11 @@ public class SearchUpdaterImpl implements SearchUpdater {
             }
 
             // Re-enable refresh & optimize, enable searching on index
-            ES_CLIENT.admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
+            es.getClient().admin().indices().prepareUpdateSettings(ES_UPDATEALIAS)
                 .setSettings(ImmutableSettings.builder()
                     .put("index.refresh_interval", "1s"))
                 .get();
-            ES_CLIENT.admin().indices().prepareOptimize(ES_UPDATEALIAS).get();
+            es.getClient().admin().indices().prepareOptimize(ES_UPDATEALIAS).get();
             redirectAndDeleteAliasedIndex(ES_SEARCHALIAS, ES_UPDATEALIAS);
         } finally {
             isReindexingAll.getAndSet(false);
