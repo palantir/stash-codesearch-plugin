@@ -537,22 +537,25 @@ public class SearchUpdaterImpl implements SearchUpdater {
             log.warn("Not performing a repository reindex triggered since indexing is disabled");
             return false;
         }
-
         log.warn("Manual reindex triggered for {}^{} (expensive operation, use sparingly)", projectKey, repositorySlug);
 
         // Delete documents for this repository
-        runWithBlockedJobPool(new Runnable() {
-            @Override public void run () {
-                log.warn("Deleting {}^{} for manual reindexing", projectKey, repositorySlug);
-                es.getClient().prepareDeleteByQuery(ES_UPDATEALIAS)
-                    .setRouting(projectKey + '^' + repositorySlug)
-                    .setQuery(QueryBuilders.filteredQuery(
-                        QueryBuilders.matchAllQuery(),
-                        SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
-                    .get();
-                log.warn("Deletion of {}^{} completed", projectKey, repositorySlug);
+        log.warn("Deleting {}^{} for manual reindexing", projectKey, repositorySlug);
+        for (int i = 0; i < 5; ++i) {  // since ES doesn't have a refresh setting for delete by
+                                       // query requests, we just spam multiple requests.
+            es.getClient().prepareDeleteByQuery(ES_UPDATEALIAS)
+                .setRouting(projectKey + '^' + repositorySlug)
+                .setQuery(QueryBuilders.filteredQuery(
+                    QueryBuilders.matchAllQuery(),
+                    SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
+                .get();
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                log.warn("Caught InterruptedException while trying to sleep", e);
             }
-        });
+        }
+        log.warn("Deletion of {}^{} completed", projectKey, repositorySlug);
 
         // Search for repository
         Repository repository = repositoryServiceManager.getRepositoryService().findBySlug(

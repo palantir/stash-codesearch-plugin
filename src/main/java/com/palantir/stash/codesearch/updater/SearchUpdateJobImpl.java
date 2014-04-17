@@ -98,6 +98,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     private String getLatestIndexedHash (Client client) {
         try {
             String hash = client.prepareGet(ES_UPDATEALIAS, "latestindexed", toString())
+                .setRouting(getRepoDesc())
                 .get().getSourceAsMap().get("hash").toString();
             if (hash != null && hash.length() == 40) {
                 return hash;
@@ -112,7 +113,9 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     // Returns true iff successful
     private boolean deleteLatestIndexedNote (Client client) {
         try {
-            client.prepareDelete(ES_UPDATEALIAS, "latestindexed", toString()).get();
+            client.prepareDelete(ES_UPDATEALIAS, "latestindexed", toString())
+                .setRouting(getRepoDesc())
+                .get();
         } catch (Exception e) {
             log.warn("Caught error deleting the latest indexed commit note for {} from the index",
                 toString(), e);
@@ -132,6 +135,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     .field("ref", ref)
                     .field("hash", commitHash)
                 .endObject())
+                .setRouting(getRepoDesc())
                 .get();
         } catch (Exception e) {
             log.error("Caught error adding the latest indexed hash {}:{} to the index",
