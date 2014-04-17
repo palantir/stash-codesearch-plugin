@@ -538,15 +538,19 @@ public class SearchUpdaterImpl implements SearchUpdater {
             return false;
         }
 
+        log.warn("Manual reindex triggered for {}^{} (expensive operation, use sparingly)", projectKey, repositorySlug);
+
         // Delete documents for this repository
         runWithBlockedJobPool(new Runnable() {
             @Override public void run () {
+                log.warn("Deleting {}^{} for manual reindexing", projectKey, repositorySlug);
                 es.getClient().prepareDeleteByQuery(ES_UPDATEALIAS)
                     .setRouting(projectKey + '^' + repositorySlug)
                     .setQuery(QueryBuilders.filteredQuery(
                         QueryBuilders.matchAllQuery(),
                         SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
                     .get();
+                log.warn("Deletion of {}^{} completed", projectKey, repositorySlug);
             }
         });
 
@@ -554,6 +558,7 @@ public class SearchUpdaterImpl implements SearchUpdater {
         Repository repository = repositoryServiceManager.getRepositoryService().findBySlug(
             projectKey, repositorySlug);
         if (repository == null) {
+            log.warn("Repository {}^{} not found for manual reindexing", projectKey, repositorySlug);
             return false;
         }
 
@@ -566,6 +571,8 @@ public class SearchUpdaterImpl implements SearchUpdater {
         for (Future future : futures) {
             waitForFuture(future);
         }
+
+        log.warn("Manual reindex of {}^{} completed", projectKey, repositorySlug);
         return true;
     }
 
