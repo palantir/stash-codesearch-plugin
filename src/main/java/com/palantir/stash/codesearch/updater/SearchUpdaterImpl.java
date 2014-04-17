@@ -30,11 +30,12 @@ import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
 
-public class SearchUpdaterImpl implements SearchUpdater {
+public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
     private static class ResizableSemaphore extends Semaphore {
         private int curSize = 0;
@@ -642,6 +643,11 @@ public class SearchUpdaterImpl implements SearchUpdater {
             jobPool.setMaximumPoolSize(concurrencyLimit * 5);
             semaphore.resize(concurrencyLimit);
         }
+    }
+
+    @Override
+    public void destroy () {
+        jobPool.shutdown();
     }
 
 }

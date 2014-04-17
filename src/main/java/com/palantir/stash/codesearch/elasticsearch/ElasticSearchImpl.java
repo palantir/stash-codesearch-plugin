@@ -13,8 +13,9 @@ package com.palantir.stash.codesearch.elasticsearch;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
+import org.springframework.beans.factory.DisposableBean;
 
-public class ElasticSearchImpl implements ElasticSearch {
+public class ElasticSearchImpl implements ElasticSearch, DisposableBean {
 
     private final Node node;
 
@@ -33,20 +34,21 @@ public class ElasticSearchImpl implements ElasticSearch {
             .node();
         client = node.client();
         Thread.currentThread().setContextClassLoader(currentLoader);
-        Runtime.getRuntime().addShutdownHook(new Thread (new Runnable () {
-            @Override
-            public void run () {
-                node.close();
-            }
-        }));
     }
 
+    @Override
     public Node getNode () {
         return node;
     }
 
+    @Override
     public Client getClient () {
         return client;
+    }
+
+    @Override
+    public void destroy () {
+        node.close();
     }
 
 }
