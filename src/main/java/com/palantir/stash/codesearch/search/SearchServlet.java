@@ -133,21 +133,18 @@ public class SearchServlet extends HttpServlet {
 
         // Validate permissions & build hit data map
         String repoId = project + "^" + repository;
-        boolean hasPermissions;
         Repository repoObject;
         if (repoMap == null) {  // current user is system administrator
             repoObject = repositoryServiceManager.getRepositoryService().findBySlug(
                 project, repository);
-            hasPermissions = true;
         } else {  // must validate against allowed repositories for non-administrators
             repoObject = repoMap.get(repoId);
-            hasPermissions = (
-                repoObject != null &&
-                repoObject.getProject().getKey().equals(project) &&
-                repoObject.getSlug().equals(repository));
         }
 
-        if (hasPermissions) {
+        if (repoObject != null &&
+                repoObject.getProject().getKey().equals(project) &&
+                repoObject.getSlug().equals(repository)) {
+
             // Generate refs array
             ImmutableSortedSet<String> refSet;
             try {
