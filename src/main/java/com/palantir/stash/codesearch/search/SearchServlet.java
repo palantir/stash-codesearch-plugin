@@ -197,6 +197,8 @@ public class SearchServlet extends HttpServlet {
                     .put("extension", extension)
                     .put("noHighlight", noHighlight.contains(extension));
             }
+        } else {
+            return null;
         }
 
         return hitData.build();
