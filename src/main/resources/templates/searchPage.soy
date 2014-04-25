@@ -26,11 +26,20 @@
     </head>
 
     <body>
+
+        {literal}
+            <script>
+                AJS.$(document).ready(function () {
+                    AJS.$('#advancedHide').hide();
+                });
+            </script>
+        {/literal}
+
         <div class="page-container">
 
             <h1>Stash Codesearch</h1>
 
-            <form class="aui" id="search-form">
+            <form class="aui search-form" id="search-form">
                 <input type="hidden" name="has-results" value="true">
                 <fieldset class="group">
                     <div class="field-group">
@@ -43,8 +52,7 @@
                         </div>
                     </div>
                 </fieldset>
-                <div id="advancedFilters" {if $doSearch}hidden{/if}>
-                    <h3>Advanced Filters</h3>
+                <div id="advancedFilters" hidden>
                     <div class="field-container">
                         <div class="field-column">
                             <fieldset class="group">
@@ -127,9 +135,14 @@
                         <input class="aui-button aui-button-primary submit" type="submit" id="statisticsButton"
                             value="Analytic Search"
                             onclick="AJS.$('#showStatisticsHidden').val('true')">
-                        <input class="aui-button" {if not $doSearch}hidden type="hidden"{else}type="submit"{/if}
-                            id="advancedToggle" value="Advanced Options"
-                            onclick="AJS.$('#advancedFilters').show(); AJS.$('#advancedToggle').hide(); return false;">
+                        <input class="aui-button" type="submit" id="advancedShow"
+                            value="Advanced Options"
+                            onclick="AJS.$('#advancedFilters').show(); AJS.$('#advancedShow').hide();
+                                AJS.$('#advancedHide').show(); return false;">
+                        <input class="aui-button" type="submit" id="advancedHide" hidden
+                            value="Hide Advanced Options"
+                            onclick="AJS.$('#advancedFilters').hide(); AJS.$('#advancedShow').show();
+                                AJS.$('#advancedHide').hide(); return false;">
                         <input type="hidden" name="showStatistics" id="showStatisticsHidden" value="false">
                     </div>
                 </div>
