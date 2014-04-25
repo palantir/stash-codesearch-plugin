@@ -406,7 +406,7 @@ public class SearchServlet extends HttpServlet {
                             .build();
                     }
                 }
- 
+
             }
 
             // Iterate through current page of search hits
@@ -616,7 +616,7 @@ public class SearchServlet extends HttpServlet {
             if (committedAfterStr == null) {
                 committedAfterStr = "";
             }
-             
+
             String committedBeforeStr = req.getParameter("committedBefore");
             if (committedBeforeStr == null) {
                 committedBeforeStr = "";

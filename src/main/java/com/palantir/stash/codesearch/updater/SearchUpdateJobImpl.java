@@ -259,7 +259,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         // Unique identifier for repo
         String repoDesc = getRepoDesc();
 
-        // Unique identifier for ref 
+        // Unique identifier for ref
         String refDesc = toString();
 
         // Hash of latest indexed commit

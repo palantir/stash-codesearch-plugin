@@ -19,287 +19,288 @@
 {template .searchPage}
 
 <html>
-<meta name="decorator" content="atl.general">
-<head>
-    <title>Stash Codesearch</title>
-</head>
 
-<body>
+    <head>
+        <meta name="decorator" content="atl.general">
+        <title>Stash Codesearch</title>
+    </head>
 
-{literal}
-<script>
-    hljs.configure({tabReplace: '    '});
-    hljs.initHighlightingOnLoad();
-</script>
-{/literal}
+    <body>
+        <div class="page-container">
 
-<div class="page-container">
+            <h1>Stash Codesearch</h1>
 
-<h1>Stash Codesearch</h1>
-
-<form class="aui" id="search-form" {if $doSearch}hidden{/if}>
-    <input type="hidden" name="has-results" value="true">
-    <fieldset class="group">
-        <div class="field-group">
-            <label for="searchString">Search string</label>
-            <input class="text medium-field" type="text" id="searchString" name="searchString" {if $prevParams.searchString}value="{$prevParams.searchString}"{/if}>
-            <div class="description">
-                String to search for in source code, commit messages and filenames.
-                Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.
-            </div>
-        </div>
-    </fieldset>
-    <h3>Filters (optional)</h3>
-    <fieldset class="group">
-        <div class="checkbox">
-            <label for="searchCode">Search code</label>
-            <input class="checkbox" type="checkbox" name="searchCode" id="searchCode" {if $prevParams.searchCode}checked{/if}>
-        </div>
-        <div class="checkbox">
-            <label for="searchFilenames">Search filenames</label>
-            <input class="checkbox" type="checkbox" name="searchFilenames" id="searchFilenames" {if $prevParams.searchFilenames == null or $prevParams.searchFilenames}checked{/if}>
-        </div>
-        <div class="checkbox">
-            <label for="searchCommits">Search commits</label>
-            <input class="checkbox" type="checkbox" name="searchCommits" id="searchCommits" {if $prevParams.searchCommits == null or $prevParams.searchCommits}checked{/if}>
-        </div>
-        <div class="field-group">
-            <label for="projectKeys">Project keys</label>
-            <input class="text medium-field" type="text" name="projectKeys" id="projectKeys" placeholder="Default: any project" {if $prevParams.projectKeys}value="{$prevParams.projectKeys}"{/if}>
-            <div class="description">Comma-separated</div>
-        </div>
-        <div class="field-group">
-            <label for="repoNames">Repository names (slugs)</label>
-            <input class="text medium-field" type="text" name="repoNames" id="repoNames" placeholder="Default: any repo" {if $prevParams.repoNames}value="{$prevParams.repoNames}"{/if}>
-            <div class="description">Comma-separated</div>
-        </div>
-        <div class="field-group">
-            <label for="refNames">Ref names</label>
-            <input class="text medium-field" type="text" name="refNames" id="refNames" placeholder="Default: any ref" {if $prevParams.refNames}value="{$prevParams.refNames}"{/if}>
-            <div class="description">Comma-separated</div>
-        </div>
-        <div class="field-group">
-            <label for="extensions">File extensions</label>
-            <input class="text medium-field" type="text" id="extensions" name="extensions" placeholder="Default: any extension" {if $prevParams.extensions}value="{$prevParams.extensions}"{/if}>
-            <div class=description>Comma separated, files only</div>
-        </div>
-        <div class="field-group">
-            <label for="authorNames">Author/editor names or emails</label>
-            <input class="text medium-field" type="text" id="authorNames" name="authorNames" placeholder="Default: any author" {if $prevParams.authorNames}value="{$prevParams.authorNames}"{/if}>
-            <div class="description">Comma-separated, commits only</div>
-        </div>
-        <div class="field-group">
-            <label for="committedAfter">Committed on or after</label>
-            <input class="aui-date-picker" id="committedAfter" name="committedAfter" type="date" {if $prevParams.committedAfter}value="{$prevParams.committedAfter}"{/if}>
-            <div class="description">Commits only</div>
-        </div>
-        <div class="field-group">
-            <label for="committedBefore">Committed on or before</label>
-            <input class="aui-date-picker" id="committedBefore" name="committedBefore" type="date" {if $prevParams.committedBefore}value="{$prevParams.committedBefore}"{/if}>
-            <div class="description">Commits only</div>
-        </div>
-    </fieldset>
-    <div class="buttons-container">
-        <div class="buttons">
-            <input class="button submit" type="submit" value="Search" id="search-button">
-            <input class="button submit" type="submit" value="Statistics" id="statistics-button"
-                onclick="AJS.$('#showStatisticsHidden').val('true')">
-            <input type="hidden" name="showStatistics" id="showStatisticsHidden" value="false">
-        </div>
-    </div>
-</form>
-
-<div id="search-query-toggle" {if not $doSearch}hidden{/if}>
-    <button class="aui-button aui-button-primary" onclick="AJS.$('#search-form').show(); AJS.$('#search-query-toggle').hide();">Search again</button>
-</div>
-
-{if length(keys($statistics))}
-<div class="statistics-container">
-    <div style="display:table-row;">
-        <div class="statistics-pane">
-            {if $statistics.filecount}
-            <h2>General file statistics</h2>
-            <table class="aui statistics-table">
-                <tr><td>Number of files</b></td><td>{$statistics.filecount}</td></tr>
-                <tr><td>Unique file extensions</td><td>{$statistics.extensionCardinality}</td></tr>
-            </table>
-            {/if}
-        </div>
-        <div class="statistics-pane">
-            {if $statistics.commitcount}
-            <h2>Commit Statistics</h2>
-            <table class="aui statistics-table">
-                <tr><td>Number of commits</td><td>{$statistics.commitcount}</td></tr>
-                <tr><td>Unique authors</td><td>{$statistics.authorCardinality}</td></tr>
-            </table>
-            {/if}
-        </div>
-    </div>
-    <div style="display:table-row;">
-        <div class="statistics-pane">
-            {if $statistics.filecount}
-            <h2>File character count statistics</h2>
-            <table class="aui statistics-table">
-                <tr><td>Total character count</td><td>{$statistics.charcount.sum}</td></tr>
-                <tr><td>Average character count</td><td>{round($statistics.charcount.average, 1)}</td></tr>
-                <tr><td>Minimum character count</td><td>{$statistics.charcount.min}</td></tr>
-                {foreach $entry in $statistics.charcount.percentiles}
-                <tr><td>{round($entry.percentile)}-percentile character count</td><td>{round($entry.value)}</td></tr>
-                {/foreach}
-                <tr><td>Maximum character count</td><td>{$statistics.charcount.max}</td></tr>
-            </table>
-            {/if}
-        </div>
-        <div class="statistics-pane">
-            {if $statistics.filecount}
-            <h2>File line count statistics</h2>
-            <table class="aui statistics-table">
-                <tr><td>Total line count</td><td>{$statistics.linecount.sum}</td></tr>
-                <tr><td>Average line count</td><td>{round($statistics.linecount.average, 2)}</td></tr>
-                <tr><td>Minimum line count</td><td>{$statistics.linecount.min}</td></tr>
-                {foreach $entry in $statistics.linecount.percentiles}
-                <tr><td>{round($entry.percentile)}-percentile line count</td><td>{round($entry.value)}</td></tr>
-                {/foreach}
-                <tr><td>Maximum line count</td><td>{$statistics.linecount.max}</td></tr>
-            </table>
-
-            {/if}
-        </div>
-    </div>
-    <div style="display:table-row;">
-        <div class="statistics-pane">
-            {if length($statistics.extensionRanking)}
-            <h2>Top file extensions</h2>
-            <table class="aui statistics-table">
-                <tr><th>Extension</th><th>Files</th></tr>
-                {foreach $entry in $statistics.extensionRanking}
-                <tr><td>{if $entry.key}{$entry.key}{else}<i>None</i>{/if}</td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td><tr>
-                {/foreach}
-            </table>
-            {/if}
-        </div>
-        <div class="statistics-pane">
-            {if length($statistics.authorRanking)}
-            <h2>Top authors</h2>
-            <table class="aui statistics-table">
-                <tr><th>Author</th><th>Commits</th></tr>
-                {foreach $entry in $statistics.authorRanking}
-                <tr><td>{if $entry.key}<a href="mailto:{$entry.key}">{$entry.key}</a>{else}<i>None</i>{/if}</a></td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td></tr>
-                {/foreach}
-            </table>
-            {/if}
-        </div>
-    </div>
-</div>
-{/if}
-
-{if $totalHits > 0}
-<h2>Results {$resultFrom}-{$resultTo} of {$totalHits}</h2>
-<span>Took {$searchTime} ms</span>
-{/if}
-
-{foreach $hit in $hitArray}
-<div class="aui-group result-container">
-
-    {let $iscommit: $hit.type == 'commit'/}
-    {let $isfile: $hit.type == 'file'/}
-
-    // Show repo, project, and refs
-    <span class="result-header">
-        <a href="{$baseUrl}/projects/{$hit.project}">{$hit.projectname} </a>/
-        <a href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}"> {$hit.repositoryname}</a>
-        &nbsp;&nbsp;[
-        {foreach $ref in $hit.refs}
-            &nbsp;<a class="ref-link" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse?at={$ref}">{$ref}</a>&nbsp;
-        {/foreach}
-        ]
-    </span>
-
-    // Show title (hash or path)
-    <h3 class="result-title">
-    {if $iscommit}
-        Commit <b><a class="commit-hash" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/commits/{$hit.hash}">{$hit.hash}</a></b>
-    {elseif $isfile}
-        File <b><a class="file-name" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse/{$hit.path}?at={$hit.primaryRef}">{$hit.path}</a></b>
-    {/if}
-    </h3>
-
-    // Show commit subject & body
-    {if $iscommit}
-        <b class="commit-subject">{$hit.subject}</b>
-        <i> by <a href="mailto:{$hit.authorEmail}">{$hit.authorName}</a> on {$hit.commitDate}</i>
-        {if $hit.body}
-            <div class="text-view-container">
-                <div class="view-label">Message body</div>
-                <div class="text-view"><pre>{$hit.body}</pre></div>
-            </div>
-        {/if}
-
-    // Show file contents
-    {elseif $isfile}
-        <div class="container text-view-container">
-            <div class="view-label">
-                {$hit.isPreview ? 'Preview' : 'Matching Lines'}
-                {if $hit.excessLines > 0}<span> ({$hit.shownLines} of {$hit.shownLines + $hit.excessLines} lines shown)</span>{/if}
-            </div>
-            <div class="text-view">
-                <div class="inline-block line-numbers">
-                    <pre>{$hit.sourceLineNums}</pre>
+            <form class="aui" id="search-form">
+                <input type="hidden" name="has-results" value="true">
+                <fieldset class="group">
+                    <div class="field-group">
+                        <label for="searchString">Search string</label>
+                        <input class="text search-box" type="text" id="searchString" name="searchString" {if $prevParams.searchString}value="{$prevParams.searchString}"{/if}>
+                        <div class="description">
+                            String to search for in source code, filenames, commit messages, and commit hashes.<br>
+                            Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.
+                        </div>
+                    </div>
+                </fieldset>
+                <div id="advancedFilters" {if $doSearch}hidden{/if}>
+                    <h3>Advanced Filters</h3>
+                    <div class="field-container">
+                        <div class="field-column">
+                            <fieldset class="group">
+                                <div class="checkbox">
+                                    <label for="searchCode">Search code</label>
+                                    <input class="checkbox" type="checkbox" name="searchCode" id="searchCode" {if $prevParams.searchCode}checked{/if}>
+                                </div>
+                                <div class="checkbox">
+                                    <label for="searchFilenames">Search filenames</label>
+                                    <input class="checkbox" type="checkbox" name="searchFilenames" id="searchFilenames" {if $prevParams.searchFilenames == null or $prevParams.searchFilenames}checked{/if}>
+                                </div>
+                                <div class="checkbox">
+                                    <label for="searchCommits">Search commits</label>
+                                    <input class="checkbox" type="checkbox" name="searchCommits" id="searchCommits" {if $prevParams.searchCommits == null or $prevParams.searchCommits}checked{/if}>
+                                </div>
+                                <div class="field-group">
+                                    <label for="projectKeys">Project keys</label>
+                                    <input class="text medium-field" type="text" name="projectKeys" id="projectKeys" placeholder="Default: any project" {if $prevParams.projectKeys}value="{$prevParams.projectKeys}"{/if}>
+                                    <div class="description">Comma-separated</div>
+                                </div>
+                                <div class="field-group">
+                                    <label for="repoNames">Repository slugs</label>
+                                    <input class="text medium-field" type="text" name="repoNames" id="repoNames" placeholder="Default: any repo" {if $prevParams.repoNames}value="{$prevParams.repoNames}"{/if}>
+                                    <div class="description">Comma-separated</div>
+                                </div>
+                                <div class="field-group">
+                                    <label for="refNames">Ref names</label>
+                                    <input class="text medium-field" type="text" name="refNames" id="refNames" placeholder="Default: any ref" {if $prevParams.refNames}value="{$prevParams.refNames}"{/if}>
+                                    <div class="description">Comma-separated</div>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <div class="field-column">
+                            <fieldset class="group">
+                                <div class="field-group">
+                                    <label for="extensions">File extensions</label>
+                                    <input class="text medium-field" type="text" id="extensions" name="extensions" placeholder="Default: any extension" {if $prevParams.extensions}value="{$prevParams.extensions}"{/if}>
+                                    <div class=description>Comma separated, files only</div>
+                                </div>
+                                <div class="field-group">
+                                    <label for="authorNames">Author/editor names or emails</label>
+                                    <input class="text medium-field" type="text" id="authorNames" name="authorNames" placeholder="Default: any author" {if $prevParams.authorNames}value="{$prevParams.authorNames}"{/if}>
+                                    <div class="description">Comma-separated, commits only</div>
+                                </div>
+                                <div class="field-group">
+                                    <label for="committedAfter">Committed on or after</label>
+                                    <input class="text medium-field" id="committedAfter" name="committedAfter" type="date" {if $prevParams.committedAfter}value="{$prevParams.committedAfter}"{/if}>
+                                    <div class="description">Commits only</div>
+                                </div>
+                                <div class="field-group">
+                                    <label for="committedBefore">Committed on or before</label>
+                                    <input class="text medium-field" id="committedBefore" name="committedBefore" type="date" {if $prevParams.committedBefore}value="{$prevParams.committedBefore}"{/if}>
+                                    <div class="description">Commits only</div>
+                                </div>
+                            </fieldset>
+                        </div>
+                    </div>
                 </div>
-                <div class="inline-block source-code">
-                    <pre class="{if $hit.noHighlight}no-highlight{/if} {if $hit.extension}language-{$hit.extension}{else}{/if}">
-                        <code>{$hit.sourceLines}</code>
-                    </pre>
+                <div class="buttons-container">
+                    <div class="buttons">
+                        <input class="aui-button aui-button-primary submit" type="submit" value="Search" id="search-button">
+                        <input class="aui-button aui-button-primary submit" type="submit" value="Analytic Search" id="statistics-button"
+                            onclick="AJS.$('#showStatisticsHidden').val('true')">
+                        <input class="aui-button" {if not $doSearch}hidden type="hidden"{else}type="submit"{/if} value="Advanced Options" id="advancedToggle"
+                            onclick="AJS.$('#advancedFilters').show(); AJS.$('#advancedToggle').hide(); return false;">
+                        <input type="hidden" name="showStatistics" id="showStatisticsHidden" value="false">
+                    </div>
                 </div>
-            </div>
+            </form>
+
+            {if length(keys($statistics)) and ($statistics.filecount or $statistics.commitcount)}
+                <hr class="statistics-top">
+                <div class="statistics-container">
+                    <div style="display:table-row;">
+                        <div class="statistics-pane">
+                            {if $statistics.filecount}
+                                <h2>General file statistics</h2>
+                                <table class="aui statistics-table">
+                                    <tr><td>Number of files</b></td><td>{$statistics.filecount}</td></tr>
+                                    <tr><td>Unique file extensions</td><td>{$statistics.extensionCardinality}</td></tr>
+                                </table>
+                            {/if}
+                        </div>
+                        <div class="statistics-pane">
+                            {if $statistics.commitcount}
+                                <h2>Commit Statistics</h2>
+                                <table class="aui statistics-table">
+                                    <tr><td>Number of commits</td><td>{$statistics.commitcount}</td></tr>
+                                    <tr><td>Unique authors</td><td>{$statistics.authorCardinality}</td></tr>
+                                </table>
+                            {/if}
+                        </div>
+                    </div>
+                    <div style="display:table-row;">
+                        <div class="statistics-pane">
+                            {if $statistics.filecount}
+                                <h2>File character count statistics</h2>
+                                <table class="aui statistics-table">
+                                    <tr><td>Total character count</td><td>{$statistics.charcount.sum}</td></tr>
+                                    <tr><td>Average character count</td><td>{round($statistics.charcount.average, 1)}</td></tr>
+                                    <tr><td>Minimum character count</td><td>{$statistics.charcount.min}</td></tr>
+                                    {foreach $entry in $statistics.charcount.percentiles}
+                                        <tr><td>{round($entry.percentile)}-percentile character count</td><td>{round($entry.value)}</td></tr>
+                                    {/foreach}
+                                    <tr><td>Maximum character count</td><td>{$statistics.charcount.max}</td></tr>
+                                </table>
+                            {/if}
+                        </div>
+                        <div class="statistics-pane">
+                            {if $statistics.filecount}
+                                <h2>File line count statistics</h2>
+                                <table class="aui statistics-table">
+                                    <tr><td>Total line count</td><td>{$statistics.linecount.sum}</td></tr>
+                                    <tr><td>Average line count</td><td>{round($statistics.linecount.average, 2)}</td></tr>
+                                    <tr><td>Minimum line count</td><td>{$statistics.linecount.min}</td></tr>
+                                    {foreach $entry in $statistics.linecount.percentiles}
+                                    <tr><td>{round($entry.percentile)}-percentile line count</td><td>{round($entry.value)}</td></tr>
+                                    {/foreach}
+                                    <tr><td>Maximum line count</td><td>{$statistics.linecount.max}</td></tr>
+                                </table>
+                            {/if}
+                        </div>
+                    </div>
+                    <div style="display:table-row;">
+                        <div class="statistics-pane">
+                            {if length($statistics.extensionRanking)}
+                                <h2>Top file extensions</h2>
+                                <table class="aui statistics-table">
+                                    <tr><th>Extension</th><th>Files</th></tr>
+                                    {foreach $entry in $statistics.extensionRanking}
+                                        <tr><td>{if $entry.key}{$entry.key}{else}<i>None</i>{/if}</td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td><tr>
+                                    {/foreach}
+                                </table>
+                            {/if}
+                        </div>
+                        <div class="statistics-pane">
+                            {if length($statistics.authorRanking)}
+                                <h2>Top authors</h2>
+                                <table class="aui statistics-table">
+                                    <tr><th>Author</th><th>Commits</th></tr>
+                                    {foreach $entry in $statistics.authorRanking}
+                                        <tr><td>{if $entry.key}<a href="mailto:{$entry.key}">{$entry.key}</a>{else}<i>None</i>{/if}</a></td><td>{$entry.count} ({round($entry.proportion * 100, 1)}%)</td></tr>
+                                    {/foreach}
+                                </table>
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
+            {if length($hitArray)}
+                <hr class="results-top">
+                <h2>Results {$resultFrom}-{$resultTo} of {$totalHits}</h2>
+                <span>Took {$searchTime} ms</span>
+            {/if}
+
+            {foreach $hit in $hitArray}
+                <div class="aui-group result-container">
+                    {let $iscommit: $hit.type == 'commit'/}
+                    {let $isfile: $hit.type == 'file'/}
+
+                    // Show repo, project, and refs
+                    <span class="result-header">
+                        <a href="{$baseUrl}/projects/{$hit.project}">{$hit.projectname} </a>/
+                        <a href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}"> {$hit.repositoryname}</a>
+                        &nbsp;&nbsp;[
+                        {foreach $ref in $hit.refs}
+                            &nbsp;<a class="ref-link" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse?at={$ref}">{$ref}</a>&nbsp;
+                        {/foreach}
+                        ]
+                    </span>
+
+                    // Show title (hash or path)
+                    <h3 class="result-title">
+                        {if $iscommit}
+                            Commit <b><a class="commit-hash" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/commits/{$hit.hash}">{$hit.hash}</a></b>
+                        {elseif $isfile}
+                            File <b><a class="file-name" href="{$baseUrl}/projects/{$hit.project}/repos/{$hit.repository}/browse/{$hit.path}?at={$hit.primaryRef}">{$hit.path}</a></b>
+                        {/if}
+                    </h3>
+
+                    // Show commit subject & body
+                    {if $iscommit}
+                        <b class="commit-subject">{$hit.subject}</b>
+                        <i> by <a href="mailto:{$hit.authorEmail}">{$hit.authorName}</a> on {$hit.commitDate}</i>
+                        {if $hit.body}
+                            <div class="text-view-container">
+                                <div class="view-label">Message body</div>
+                                <div class="text-view"><pre>{$hit.body}</pre></div>
+                            </div>
+                        {/if}
+
+                    // Show file contents
+                    {elseif $isfile}
+                        <div class="container text-view-container">
+                            <div class="view-label">
+                                {$hit.isPreview ? 'Preview' : 'Matching Lines'}
+                                {if $hit.excessLines > 0}<span> ({$hit.shownLines} of {$hit.shownLines + $hit.excessLines} lines shown)</span>{/if}
+                            </div>
+                            <div class="text-view">
+                                <div class="inline-block line-numbers">
+                                    <pre>{$hit.sourceLineNums}</pre>
+                                </div>
+                                <div class="inline-block source-code">
+                                    <pre class="{if $hit.noHighlight}no-highlight{/if} {if $hit.extension}language-{$hit.extension}{else}{/if}">
+                                        <code>{$hit.sourceLines}</code>
+                                    </pre>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+            {/foreach}
+
+            // Pagination
+            {if $doSearch and length($hitArray) and not $error}
+                <div class="paging-row">
+                    <span>Page: </span>
+                    {for $i in range(0, 3)}
+                        {if $i < $pages}
+                            <span class="pageno"> &nbsp;&nbsp;
+                                {if $i == $currentPage}
+                                    <b>{$i + 1}</b>
+                                {else}
+                                    <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+                                {/if}
+                            </span>
+                        {/if}
+                    {/for}
+                    {for $i in range($currentPage - 2, $currentPage + 3)}
+                        {if $i >= 3 and $i < $pages - 3}
+                            <span class="pageno"> &nbsp;&nbsp;
+                                {if $i == $currentPage}
+                                    <b>{$i + 1}</b>
+                                {else}
+                                    <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+                                {/if}
+                            </span>
+                        {/if}
+                    {/for}
+                    {for $i in range($pages - 3, $pages)}
+                        {if $i >= 3}
+                            <span class="pageno"> &nbsp;&nbsp;
+                                {if $i == $currentPage}
+                                    <b>{$i + 1}</b>
+                                {else}
+                                    <a href="{$fullUri}&page={$i}">{$i + 1}</a>
+                                {/if}
+                            </span>
+                        {/if}
+                    {/for}
+                </div>
+            {elseif $doSearch}
+                <div class="no-results">No results. {$error}</div>
+            {/if}
+
         </div>
-    {/if}
-</div>
-{/foreach}
-
-// Pagination
-{if $doSearch and $totalHits > 0 and not $error}
-<div class="paging-row">
-    <span>Page: </span>
-    {for $i in range(0, 3)}
-        {if $i < $pages}
-            <span class="pageno"> &nbsp;&nbsp;
-            {if $i == $currentPage}
-                <b>{$i + 1}</b>
-            {else}
-                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
-            {/if}
-            </span>
-        {/if}
-    {/for}
-    {for $i in range($currentPage - 2, $currentPage + 3)}
-        {if $i >= 3 and $i < $pages - 3}
-            <span class="pageno"> &nbsp;&nbsp;
-            {if $i == $currentPage}
-                <b>{$i + 1}</b>
-            {else}
-                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
-            {/if}
-            </span>
-        {/if}
-    {/for}
-    {for $i in range($pages - 3, $pages)}
-        {if $i >= 3}
-            <span class="pageno"> &nbsp;&nbsp;
-            {if $i == $currentPage}
-                <b>{$i + 1}</b>
-            {else}
-                <a href="{$fullUri}&page={$i}">{$i + 1}</a>
-            {/if}
-            </span>
-        {/if}
-    {/for}
-</div>
-{elseif $doSearch}
-<div class="no-results">No results. {$error}</div>
-{/if}
-
-</div>
-</body>
+    </body>
 </html>
 {/template}

@@ -130,7 +130,7 @@ class SourceSearch {
             }
         }
 
-        // If no matches found, initialize preview 
+        // If no matches found, initialize preview
         int linesToShow = Math.min(numMatches, lineLimit);
         boolean preview = numMatches == 0;
         if (preview) {

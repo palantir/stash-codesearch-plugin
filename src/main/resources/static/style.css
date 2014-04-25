@@ -9,16 +9,33 @@
     margin-top:40px;
 }
 
+form.aui input.search-box {
+    max-width:532px;
+    width:100%;
+}
+
+form.aui div.field-group {
+    margin-top:11px;
+}
+
+form.aui div.field-container {
+    width:750px;
+    display:table;
+}
+
+form.aui div.field-column {
+    display:table-cell;
+}
+
 div.statistics-container {
     width:950px;
     display:table;
-    margin-top:20px;
 }
 
 div.statistics-pane {
     display:table-cell;
-    padding-top:20px;
-    padding-right:20px;
+    padding-top:18px;
+    padding-right:32px;
 }
 
 div.result-container {
@@ -30,6 +47,16 @@ div.result-container {
     padding-left:10px;
     padding-right:10px;
     margin-top:25px;
+}
+
+hr.statistics-top {
+    margin-top:25px;
+    margin-bottom:5px;
+}
+
+hr.results-top {
+    margin-top:25px;
+    margin-bottom:25px;
 }
 
 .result-title {
