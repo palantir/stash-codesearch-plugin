@@ -1,6 +1,4 @@
 cluster.name: stash-codesearch
-discovery.zen.ping.multicast.enabled: false
-discovery.zen.ping.unicast.hosts: localhost[9300-9325]
-transport.tcp.port: 9326-9350
-network.host: 127.0.0.1
-http.enabled: false
+client.transport.cluster.host: 127.0.0.1
+client.transport.cluster.port: 9300-9305
+client.transport.sniff: true

@@ -13,8 +13,6 @@ public interface ElasticSearch {
 
     public static final String ES_SEARCHALIAS = "scs-search";
 
-    Node getNode ();
-
     Client getClient ();
 
 }
