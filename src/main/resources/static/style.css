@@ -116,8 +116,7 @@ hr.results-top {
     color:#A000B0;
 }
 
-.no-results {
-    margin-top:20px;
+div.error {
     color:#D00000;
 }
 

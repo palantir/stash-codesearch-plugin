@@ -51,7 +51,29 @@
                             {if $prevParams.searchString}value="{$prevParams.searchString}"{/if}>
                         <div class="description">
                             String to search for in source code, filenames, commit messages, and commit hashes.<br>
-                            Uses <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">Lucene/Elasticsearch query string syntax</a>.
+                            Uses&nbsp;
+                            <a href="http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax">
+                                Lucene/Elasticsearch query string syntax
+                            </a>
+                            &nbsp;(
+                            <a id="showExamplesLink" href="#" onclick="AJS.$('#searchExamples').show();
+                                AJS.$('#showExamplesLink').hide(); AJS.$('#hideExamplesLink').show();">
+                                show examples
+                            </a>
+                            <a id="hideExamplesLink" href="#" onclick="AJS.$('#searchExamples').hide();
+                                AJS.$('#showExamplesLink').show(); AJS.$('#hideExamplesLink').hide();"
+                                hidden>
+                                hide examples
+                            </a>
+                            ).
+                            <span id="searchExamples" hidden>
+                                <br><b>Boolean query</b>: palantir AND (tech OR technologies)
+                                <br><b>Wildcard query</b>: p?la*ir
+                                <br><b>Fuzzy query</b>: plantir~
+                                <br><b>Phrase query</b>: "public static void main"
+                                <br><b>Fuzzy phrase query</b>: "public void static main"~2
+                                <br><i>And more...</i>
+                            </span>
                         </div>
                     </div>
                 </fieldset>
@@ -152,7 +174,7 @@
             </form>
 
             // Statistics section
-            {if length(keys($statistics)) and ($statistics.filecount or $statistics.commitcount)}
+            {if length(keys($statistics)) and length($hitArray)}
                 <hr class="statistics-top">
                 <div class="statistics-container">
                     <div style="display:table-row;">
@@ -293,6 +315,12 @@
                 <hr class="results-top">
                 <h2>Results {$resultFrom}-{$resultTo} of {$totalHits}</h2>
                 <span>Took {$searchTime} ms</span>
+            {elseif $doSearch}
+                <hr class="results-top">
+                <h2>No results.</h2>
+                {if $error}
+                    <div class="error">Error: {$error}</div>
+                {/if}
             {/if}
 
             {foreach $hit in $hitArray}
@@ -395,7 +423,6 @@
                     {/for}
                 </div>
             {elseif $doSearch}
-                <div class="no-results">No results. {$error}</div>
             {/if}
 
         </div>
