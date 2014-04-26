@@ -422,6 +422,7 @@ public class SearchServlet extends HttpServlet {
         // Render page
         resourceManager.requireResource("com.palantir.stash.stash-code-search:scs-resources");
         resourceManager.requireResource("com.atlassian.auiplugin:aui-date-picker");
+        resourceManager.requireResource("com.atlassian.auiplugin:aui-experimental-tooltips");
         resp.setContentType("text/html");
         try {
             String queryString = req.getQueryString();

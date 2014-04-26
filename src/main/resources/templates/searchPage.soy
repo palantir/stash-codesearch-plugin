@@ -31,6 +31,9 @@
             <script>
                 AJS.$(document).ready(function () {
                     AJS.$('#advancedHide').hide();
+                    AJS.$('.tooltip-element').each(function(index, element) {
+                        AJS.$(element).tooltip();
+                    });
                 });
             </script>
         {/literal}
@@ -130,10 +133,10 @@
                 </div>
                 <div class="buttons-container">
                     <div class="buttons">
-                        <input class="aui-button aui-button-primary submit" type="submit" id="searchButton"
+                        <input class="aui-button aui-button-primary" type="submit" id="searchButton"
                             value="Search">
-                        <input class="aui-button aui-button-primary submit" type="submit" id="statisticsButton"
-                            value="Analytic Search"
+                        <input class="aui-button aui-button tooltip-element" type="submit" id="statisticsButton"
+                            value="Analytic Search" title="Displays search results with various summary statistics."
                             onclick="AJS.$('#showStatisticsHidden').val('true')">
                         <input class="aui-button" type="submit" id="advancedShow"
                             value="Advanced Options"
