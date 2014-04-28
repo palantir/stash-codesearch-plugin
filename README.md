@@ -26,7 +26,7 @@ Before installing, you should have:
 To install:
 
 - Compile the Stash plugin (see [above](#compile-guide)).
-- Upload the `target/stash-code-search-VERSION.jar` file to your Stash instance's plugin manager (`http:/stash.url/plugins/servlet/upm`).
+- Upload the `target/stash-code-search-VERSION.jar` file to your Stash instance's plugin manager (`http://stash.url/plugins/servlet/upm`).
 
 Note: you must enable indexing and trigger a reindex after installation (see [below](#administration) for instructions).
 

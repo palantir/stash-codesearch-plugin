@@ -1,10 +1,6 @@
 /**
  * Contains the elasticsearch Node and Client objects used by all other classes.
  *
- * These variables are all static since ElasticSearch best practice is apparently to
- * use 1 client per JVM. Also, we can clean up using a shutdown hook instead of relying on
- * finalize() or creating our own cleanup glue.
- *
  * Config is loaded from elasticsearch.yml in the resources path.
  */
 
