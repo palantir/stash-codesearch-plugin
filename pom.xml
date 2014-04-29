@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.palantir.stash</groupId>
     <artifactId>stash-code-search</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <name>Stash Codesearch</name>
     <description>Provides global repository, commit, and file content search for Stash instances</description>
     <packaging>atlassian-plugin</packaging>
