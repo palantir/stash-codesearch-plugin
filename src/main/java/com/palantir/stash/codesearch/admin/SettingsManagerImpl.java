@@ -1,5 +1,5 @@
 /**
- * Stores and retrieves codesearch global settings.
+ * Default implementation of SettingsManager.
  */
 
 package com.palantir.stash.codesearch.admin;

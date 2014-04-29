@@ -50,13 +50,7 @@
         <interface>com.palantir.stash.codesearch.updater.SearchUpdater</interface>
     </component>
 
-    <post-receive-hook name="Search Updater Hook (post-receive)" key="post-receive-updater-hook" class="com.palantir.stash.codesearch.hook.PostReceiveUpdaterHook">
-        <description key="post-receive-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on pushes.</description>
-    </post-receive-hook>
-
-    <merge-check name="Search Updater Hook (merge)" key="merge-updater-hook" class="com.palantir.stash.codesearch.hook.MergeUpdaterHook">
-        <description key="merge-updater-hook.description">Enable this hook to automatically perform incremental codesearch index updates on merges.</description>
-    </merge-check>
+    <component key="indexer-event-listener" class="com.palantir.stash.codesearch.event.IndexerEventListener" />
 
     <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
         <label>Codesearch</label>

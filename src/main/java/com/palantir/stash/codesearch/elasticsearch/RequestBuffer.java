@@ -1,6 +1,6 @@
 /**
  * Class that automatically queues and submits ElasticSearch requests via BulkRequests. This class
- * is not thread-safe.
+ * is _not_ thread-safe.
  */
 
 package com.palantir.stash.codesearch.elasticsearch;

@@ -1,7 +1,8 @@
 /**
  * Interface for incremental updates of the search index. Must be stopped during full reindexing.
  * To facilitate both incremental updates and full reindexes, implementations should maintain two
- * job queues -- one for branch reindexes, and another for branch updates (triggered by hooks and merge checks).
+ * job queues -- one for branch reindexes, and another for branch updates (triggered by ref change
+ * events)
  */
 
 package com.palantir.stash.codesearch.updater;

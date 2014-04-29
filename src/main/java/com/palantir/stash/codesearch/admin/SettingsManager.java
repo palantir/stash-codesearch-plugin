@@ -31,6 +31,7 @@ public interface SettingsManager {
         Repository repository,
         String refRegex);
 
+    // Adds a search updater for concurrency settings modification
     void addSearchUpdater (SearchUpdater updater);
 
 }

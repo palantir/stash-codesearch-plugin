@@ -21,11 +21,15 @@ public class ElasticSearchImpl implements ElasticSearch, DisposableBean {
 
     public ElasticSearchImpl () throws SettingsException {
         client = new TransportClient();
+
+        // HACK: get hostname from elasticsearch.yml
         String host = client.settings().get("client.transport.cluster.host");
         if (host == null) {
             throw new SettingsException(
                 "client.transport.cluster.host must be set to a cluster data node address");
         }
+
+        // HACK: get port/port range from elasticsearch.yml (format for ranges is 1234-2345)
         int fromPort = 0, toPort = 0;
         String portSetting = client.settings().get("client.transport.cluster.port");
         if (portSetting == null) {
@@ -50,6 +54,8 @@ public class ElasticSearchImpl implements ElasticSearch, DisposableBean {
             throw new SettingsException(
                 "Error parsing client.transport.cluster.port (too may dashes)");
         }
+
+        // Create a new transport address for reach port in the port range
         for (int port = fromPort; port <= toPort; ++port) {
             client.addTransportAddress(new InetSocketTransportAddress(host, port));
         }
