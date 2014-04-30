@@ -452,6 +452,9 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
             }
         }
 
+        // Clear memory
+        filesToAdd = null;
+
         // Get deleted commits
         String [] deletedCommits;
         try {
