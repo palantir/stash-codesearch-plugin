@@ -4,26 +4,60 @@
 
 package com.palantir.stash.codesearch.admin;
 
-import com.atlassian.soy.renderer.SoyTemplateRenderer;
-import com.atlassian.stash.exception.AuthorisationException;
-import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.util.Operation;
-import com.google.common.collect.ImmutableMap;
-import com.palantir.stash.codesearch.updater.SearchUpdater;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_BODY_BOOST_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_BODY_BOOST_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_HASH_BOOST_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_HASH_BOOST_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_SUBJECT_BOOST_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.COMMIT_SUBJECT_BOOST_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.FILE_NAME_BOOST_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.FILE_NAME_BOOST_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_CONCURRENT_INDEXING_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_CONCURRENT_INDEXING_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_FILE_SIZE_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_FILE_SIZE_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_FRAGMENTS_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_FRAGMENTS_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_MATCH_LINES_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_MATCH_LINES_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_PREVIEW_LINES_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.MAX_PREVIEW_LINES_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.PAGE_SIZE_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.PAGE_SIZE_UB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.SEARCH_TIMEOUT_LB;
+import static com.palantir.stash.codesearch.admin.GlobalSettings.SEARCH_TIMEOUT_UB;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import javax.servlet.*;
-import javax.servlet.http.*;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.palantir.stash.codesearch.admin.GlobalSettings.*;
+import com.atlassian.soy.renderer.SoyTemplateRenderer;
+import com.atlassian.stash.exception.AuthorisationException;
+import com.atlassian.stash.server.ApplicationPropertiesService;
+import com.atlassian.stash.user.EscalatedSecurityContext;
+import com.atlassian.stash.user.Permission;
+import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.stash.user.SecurityService;
+import com.atlassian.stash.util.Operation;
+import com.google.common.collect.ImmutableMap;
+import com.palantir.stash.codesearch.updater.SearchUpdater;
 
 public class GlobalSettingsServlet extends HttpServlet {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(GlobalSettingsServlet.class);
 
@@ -39,13 +73,13 @@ public class GlobalSettingsServlet extends HttpServlet {
 
     private final SoyTemplateRenderer soyTemplateRenderer;
 
-    public GlobalSettingsServlet (
-            ApplicationPropertiesService propertiesService,
-            SettingsManager settingsManager,
-            PermissionValidationService validationService,
-            SearchUpdater searchUpdater,
-            SecurityService securityService,
-            SoyTemplateRenderer soyTemplateRenderer) {
+    public GlobalSettingsServlet(
+        ApplicationPropertiesService propertiesService,
+        SettingsManager settingsManager,
+        PermissionValidationService validationService,
+        SearchUpdater searchUpdater,
+        SecurityService securityService,
+        SoyTemplateRenderer soyTemplateRenderer) {
         this.propertiesService = propertiesService;
         this.settingsManager = settingsManager;
         this.validationService = validationService;
@@ -54,9 +88,9 @@ public class GlobalSettingsServlet extends HttpServlet {
         this.soyTemplateRenderer = soyTemplateRenderer;
     }
 
-    private static int parseInt (
-            String fieldName, int min, int max, String value)
-            throws IllegalArgumentException {
+    private static int parseInt(
+        String fieldName, int min, int max, String value)
+        throws IllegalArgumentException {
         int intValue;
         try {
             intValue = Integer.parseInt(value);
@@ -72,9 +106,9 @@ public class GlobalSettingsServlet extends HttpServlet {
         return intValue;
     }
 
-    private static double parseDouble (
-            String fieldName, double min, double max, String value)
-            throws IllegalArgumentException {
+    private static double parseDouble(
+        String fieldName, double min, double max, String value)
+        throws IllegalArgumentException {
         double doubleValue;
         try {
             doubleValue = Double.parseDouble(value);
@@ -91,15 +125,15 @@ public class GlobalSettingsServlet extends HttpServlet {
     }
 
     // Make sure the current user is authenticated and a sysadmin
-    private boolean verifySysAdmin (HttpServletRequest req, HttpServletResponse resp)
-            throws IOException {
+    private boolean verifySysAdmin(HttpServletRequest req, HttpServletResponse resp)
+        throws IOException {
         try {
             validationService.validateAuthenticated();
         } catch (AuthorisationException notLoggedInException) {
             try {
                 resp.sendRedirect(propertiesService.getLoginUri(URI.create(req.getRequestURL() +
                     (req.getQueryString() == null ? "" : "?" + req.getQueryString())
-                )).toASCIIString());
+                    )).toASCIIString());
             } catch (Exception e) {
                 log.error("Unable to redirect unauthenticated user to login page", e);
             }
@@ -115,9 +149,9 @@ public class GlobalSettingsServlet extends HttpServlet {
         return true;
     }
 
-    private void renderPage (HttpServletRequest req, HttpServletResponse resp,
-            GlobalSettings globalSettings, Collection<? extends Object> errors)
-            throws ServletException, IOException {
+    private void renderPage(HttpServletRequest req, HttpServletResponse resp,
+        GlobalSettings globalSettings, Collection<? extends Object> errors)
+        throws ServletException, IOException {
         resp.setContentType("text/html");
         try {
             ImmutableMap<String, Object> data = new ImmutableMap.Builder<String, Object>()
@@ -135,16 +169,16 @@ public class GlobalSettingsServlet extends HttpServlet {
     }
 
     @Override
-    protected void doGet (HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
         if (verifySysAdmin(req, resp)) {
             renderPage(req, resp, settingsManager.getGlobalSettings(), Collections.emptyList());
         }
     }
 
     @Override
-    protected void doPost (HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
         if (!verifySysAdmin(req, resp)) {
             return;
         }
@@ -243,16 +277,21 @@ public class GlobalSettingsServlet extends HttpServlet {
             if ("true".equals(req.getParameter("reindex"))) {
                 log.info("User {} submitted an async full reindex", req.getRemoteUser());
                 new Thread(new Runnable() {
-                    @Override public void run () {
+
+                    @Override
+                    public void run() {
                         try {
-                            securityService.doWithPermission("full reindex by sysadmin",
-                                Permission.SYS_ADMIN, new Operation<Void, Exception>() {
-                                    @Override public Void perform () {
-                                        searchUpdater.reindexAll();
-                                        return null;
-                                    }
+                            EscalatedSecurityContext esc =
+                                securityService.withPermission(Permission.SYS_ADMIN, "full reindex by sysadmin");
+
+                            esc.call(new Operation<Void, Exception>() {
+
+                                @Override
+                                public Void perform() {
+                                    searchUpdater.reindexAll();
+                                    return null;
                                 }
-                            );
+                            });
                         } catch (Exception e) {
                             log.warn("Caught exception while reindexing", e);
                         }

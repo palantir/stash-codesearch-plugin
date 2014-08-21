@@ -1,21 +1,31 @@
 package com.palantir.stash.codesearch.admin;
 
+import java.io.PrintWriter;
+import java.net.URI;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.AdditionalMatchers;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+
 import com.atlassian.soy.renderer.SoyTemplateRenderer;
 import com.atlassian.stash.exception.AuthorisationException;
 import com.atlassian.stash.i18n.KeyedMessage;
 import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.*;
+import com.atlassian.stash.user.Permission;
+import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.stash.user.SecurityService;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
-import java.io.PrintWriter;
-import java.net.URI;
-import java.util.Map;
-import javax.servlet.http.*;
-import org.junit.*;
-import org.mockito.*;
 
 public class GlobalSettingsServletTest {
-
-    private static final String GLOBAL_SETTINGS_ID = "scs_global_settings";
 
     private static final String SOME_URL = "https://stash.servlet.test/someurl";
 
@@ -43,7 +53,7 @@ public class GlobalSettingsServletTest {
     private GlobalSettingsServlet servlet;
 
     @Before
-    public void setUp () throws Exception {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         Mockito.when(aps.getLoginUri(Mockito.any(URI.class))).thenReturn(URI.create(SOME_URL));
@@ -55,7 +65,7 @@ public class GlobalSettingsServletTest {
     }
 
     @Test
-    public void getTestWhenNotLoggedIn () throws Exception {
+    public void getTestWhenNotLoggedIn() throws Exception {
         Mockito.doThrow(
             new AuthorisationException(new KeyedMessage("testException", "testException", "testException")))
             .when(pvs).validateAuthenticated();
@@ -67,7 +77,7 @@ public class GlobalSettingsServletTest {
     }
 
     @Test
-    public void getTestWhenNotSysAdmin () throws Exception {
+    public void getTestWhenNotSysAdmin() throws Exception {
         Mockito.doThrow(
             new AuthorisationException(new KeyedMessage("testException", "testException", "testException")))
             .when(pvs).validateForGlobal(Permission.SYS_ADMIN);
@@ -79,10 +89,11 @@ public class GlobalSettingsServletTest {
     }
 
     @Test
-    public void getTest () throws Exception {
+    public void getTest() throws Exception {
         servlet.doGet(req, res);
 
         Mockito.verify(res).setContentType(Mockito.contains("text/html"));
+        @SuppressWarnings({ "unchecked", "rawtypes" })
         ArgumentCaptor<Map<String, Object>> mapCaptor = ArgumentCaptor.forClass(
             (Class<Map<String, Object>>) (Class) Map.class);
         Mockito.verify(str).render(
@@ -94,18 +105,21 @@ public class GlobalSettingsServletTest {
     }
 
     @Test
-    public void postTest () throws Exception {
+    public void postTest() throws Exception {
         Mockito.when(req.getParameter("indexingEnabled")).thenReturn("" + GlobalSettings.INDEXING_ENABLED_DEFAULT);
-        Mockito.when(req.getParameter("maxConcurrentIndexing")).thenReturn("" + GlobalSettings.MAX_CONCURRENT_INDEXING_DEFAULT);
+        Mockito.when(req.getParameter("maxConcurrentIndexing")).thenReturn(
+            "" + GlobalSettings.MAX_CONCURRENT_INDEXING_DEFAULT);
         Mockito.when(req.getParameter("maxFileSize")).thenReturn("" + GlobalSettings.MAX_FILE_SIZE_DEFAULT);
         Mockito.when(req.getParameter("searchTimeout")).thenReturn("" + GlobalSettings.SEARCH_TIMEOUT_DEFAULT);
-        Mockito.when(req.getParameter("noHighlightExtensions")).thenReturn("" + GlobalSettings.NO_HIGHLIGHT_EXTENSIONS_DEFAULT);
+        Mockito.when(req.getParameter("noHighlightExtensions")).thenReturn(
+            "" + GlobalSettings.NO_HIGHLIGHT_EXTENSIONS_DEFAULT);
         Mockito.when(req.getParameter("maxPreviewLines")).thenReturn("" + GlobalSettings.MAX_PREVIEW_LINES_DEFAULT);
         Mockito.when(req.getParameter("maxMatchLines")).thenReturn("" + GlobalSettings.MAX_MATCH_LINES_DEFAULT);
         Mockito.when(req.getParameter("maxFragments")).thenReturn("" + GlobalSettings.MAX_FRAGMENTS_DEFAULT);
         Mockito.when(req.getParameter("pageSize")).thenReturn("" + GlobalSettings.PAGE_SIZE_DEFAULT);
         Mockito.when(req.getParameter("commitHashBoost")).thenReturn("" + GlobalSettings.COMMIT_HASH_BOOST_DEFAULT);
-        Mockito.when(req.getParameter("commitSubjectBoost")).thenReturn("" + GlobalSettings.COMMIT_SUBJECT_BOOST_DEFAULT);
+        Mockito.when(req.getParameter("commitSubjectBoost")).thenReturn(
+            "" + GlobalSettings.COMMIT_SUBJECT_BOOST_DEFAULT);
         Mockito.when(req.getParameter("commitBodyBoost")).thenReturn("" + GlobalSettings.COMMIT_BODY_BOOST_DEFAULT);
         Mockito.when(req.getParameter("fileNameBoost")).thenReturn("" + GlobalSettings.FILE_NAME_BOOST_DEFAULT);
 

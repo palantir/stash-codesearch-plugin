@@ -4,28 +4,40 @@
 
 package com.palantir.stash.codesearch.admin;
 
-import com.atlassian.soy.renderer.SoyTemplateRenderer;
-import com.atlassian.stash.exception.AuthorisationException;
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.util.Operation;
-import com.google.common.collect.ImmutableMap;
-import com.palantir.stash.codesearch.updater.SearchUpdater;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.regex.Pattern;
-import javax.servlet.*;
-import javax.servlet.http.*;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.palantir.stash.codesearch.admin.RepositorySettings.*;
+import com.atlassian.soy.renderer.SoyTemplateRenderer;
+import com.atlassian.stash.exception.AuthorisationException;
+import com.atlassian.stash.repository.Repository;
+import com.atlassian.stash.repository.RepositoryService;
+import com.atlassian.stash.server.ApplicationPropertiesService;
+import com.atlassian.stash.user.EscalatedSecurityContext;
+import com.atlassian.stash.user.Permission;
+import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.stash.user.SecurityService;
+import com.atlassian.stash.util.Operation;
+import com.google.common.collect.ImmutableMap;
+import com.palantir.stash.codesearch.updater.SearchUpdater;
 
 public class RepositorySettingsServlet extends HttpServlet {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(RepositorySettingsServlet.class);
 
@@ -43,14 +55,14 @@ public class RepositorySettingsServlet extends HttpServlet {
 
     private final SoyTemplateRenderer soyTemplateRenderer;
 
-    public RepositorySettingsServlet (
-            ApplicationPropertiesService propertiesService,
-            SettingsManager settingsManager,
-            PermissionValidationService validationService,
-            RepositoryService repositoryService,
-            SearchUpdater searchUpdater,
-            SecurityService securityService,
-            SoyTemplateRenderer soyTemplateRenderer) {
+    public RepositorySettingsServlet(
+        ApplicationPropertiesService propertiesService,
+        SettingsManager settingsManager,
+        PermissionValidationService validationService,
+        RepositoryService repositoryService,
+        SearchUpdater searchUpdater,
+        SecurityService securityService,
+        SoyTemplateRenderer soyTemplateRenderer) {
         this.propertiesService = propertiesService;
         this.settingsManager = settingsManager;
         this.validationService = validationService;
@@ -61,15 +73,15 @@ public class RepositorySettingsServlet extends HttpServlet {
     }
 
     // Make sure the current user is authenticated
-    private boolean verifyLoggedIn (HttpServletRequest req, HttpServletResponse resp)
-            throws IOException {
+    private boolean verifyLoggedIn(HttpServletRequest req, HttpServletResponse resp)
+        throws IOException {
         try {
             validationService.validateAuthenticated();
         } catch (AuthorisationException notLoggedInException) {
             try {
                 resp.sendRedirect(propertiesService.getLoginUri(URI.create(req.getRequestURL() +
                     (req.getQueryString() == null ? "" : "?" + req.getQueryString())
-                )).toASCIIString());
+                    )).toASCIIString());
             } catch (Exception e) {
                 log.error("Unable to redirect unauthenticated user to login page", e);
             }
@@ -79,8 +91,8 @@ public class RepositorySettingsServlet extends HttpServlet {
     }
 
     // Make sure the current user is a repo admin
-    private boolean verifyRepoAdmin (HttpServletRequest req, HttpServletResponse resp,
-            Repository repository) throws IOException {
+    private boolean verifyRepoAdmin(HttpServletRequest req, HttpServletResponse resp,
+        Repository repository) throws IOException {
         try {
             validationService.validateForRepository(repository, Permission.REPO_ADMIN);
         } catch (AuthorisationException notRepoAdminException) {
@@ -92,9 +104,9 @@ public class RepositorySettingsServlet extends HttpServlet {
         return true;
     }
 
-    private void renderPage (HttpServletRequest req, HttpServletResponse resp,
-            Repository repository, RepositorySettings repositorySettings,
-            Collection<? extends Object> errors) throws ServletException, IOException {
+    private void renderPage(HttpServletRequest req, HttpServletResponse resp,
+        Repository repository, RepositorySettings repositorySettings,
+        Collection<? extends Object> errors) throws ServletException, IOException {
         resp.setContentType("text/html");
         try {
             ImmutableMap<String, Object> data = new ImmutableMap.Builder<String, Object>()
@@ -112,8 +124,8 @@ public class RepositorySettingsServlet extends HttpServlet {
     }
 
     @Override
-    protected void doGet (HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
         if (!verifyLoggedIn(req, resp)) {
             return;
         }
@@ -129,8 +141,8 @@ public class RepositorySettingsServlet extends HttpServlet {
     }
 
     @Override
-    protected void doPost (HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
         if (!verifyLoggedIn(req, resp)) {
             return;
         }
@@ -161,17 +173,22 @@ public class RepositorySettingsServlet extends HttpServlet {
                 log.info("User {} submitted an async reindex for {}^{}",
                     req.getRemoteUser(), repository.getProject().getKey(), repository.getSlug());
                 new Thread(new Runnable() {
-                    @Override public void run () {
+
+                    @Override
+                    public void run() {
                         try {
-                            securityService.doWithPermission("reindex by repo admin",
-                                Permission.REPO_ADMIN, new Operation<Void, Exception>() {
-                                    @Override public Void perform () {
-                                        searchUpdater.reindexRepository(
-                                            repository.getProject().getKey(), repository.getSlug());
-                                        return null;
-                                    }
+                            EscalatedSecurityContext esc =
+                                securityService.withPermission(Permission.REPO_ADMIN, "reindex by repo admin");
+                            esc.call(new Operation<Void, Exception>() {
+
+                                @Override
+                                public Void perform() {
+                                    searchUpdater.reindexRepository(
+                                        repository.getProject().getKey(), repository.getSlug());
+                                    return null;
                                 }
-                            );
+                            });
+
                         } catch (Exception e) {
                             log.warn("Caught exception while reindexing", e);
                         }
@@ -186,13 +203,13 @@ public class RepositorySettingsServlet extends HttpServlet {
         renderPage(req, resp, repository, settings, errors);
     }
 
-    private Repository getRepository (HttpServletRequest req) {
+    private Repository getRepository(HttpServletRequest req) {
         String uri = req.getRequestURI();
         String[] uriParts = uri.split("/");
         if (uriParts.length < 2) {
             return null;
         }
-        return repositoryService.findBySlug(
+        return repositoryService.getBySlug(
             uriParts[uriParts.length - 2], uriParts[uriParts.length - 1]);
     }
 

@@ -5,16 +5,20 @@
 package com.palantir.stash.codesearch.repository;
 
 import com.atlassian.stash.exception.AuthorisationException;
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.util.*;
+import com.atlassian.stash.repository.Branch;
+import com.atlassian.stash.repository.RefOrder;
+import com.atlassian.stash.repository.Repository;
+import com.atlassian.stash.repository.RepositoryBranchesRequest;
+import com.atlassian.stash.repository.RepositoryMetadataService;
+import com.atlassian.stash.repository.RepositoryService;
+import com.atlassian.stash.user.Permission;
+import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.stash.util.Page;
+import com.atlassian.stash.util.PageRequest;
+import com.atlassian.stash.util.PageRequestImpl;
 import com.google.common.collect.ImmutableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
-
-    private static final Logger log = LoggerFactory.getLogger(RepositoryServiceManagerImpl.class);
 
     private static final int PAGE_SIZE = 1000;
 
@@ -22,16 +26,16 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
 
     private final RepositoryMetadataService repositoryMetadataService;
 
-    public RepositoryServiceManagerImpl (
-            RepositoryService repositoryService,
-            RepositoryMetadataService repositoryMetadataService) {
+    public RepositoryServiceManagerImpl(
+        RepositoryService repositoryService,
+        RepositoryMetadataService repositoryMetadataService) {
         this.repositoryService = repositoryService;
         this.repositoryMetadataService = repositoryMetadataService;
     }
 
     @Override
-    public ImmutableMap<String, Repository> getRepositoryMap (
-            PermissionValidationService validationService) {
+    public ImmutableMap<String, Repository> getRepositoryMap(
+        PermissionValidationService validationService) {
         PageRequest req = new PageRequestImpl(0, PAGE_SIZE);
         ImmutableMap.Builder<String, Repository> repoMap =
             new ImmutableMap.Builder<String, Repository>();
@@ -56,12 +60,14 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
     }
 
     @Override
-    public ImmutableMap<String, Branch> getBranchMap (Repository repository) {
+    public ImmutableMap<String, Branch> getBranchMap(Repository repository) {
         PageRequest req = new PageRequestImpl(0, PAGE_SIZE);
         ImmutableMap.Builder<String, Branch> branchMap = new ImmutableMap.Builder<String, Branch>();
+        RepositoryBranchesRequest rbr =
+            new RepositoryBranchesRequest.Builder().repository(repository).order(RefOrder.ALPHABETICAL).build();
         while (true) {
-            Page<? extends Branch> branchPage = repositoryMetadataService.getBranches(
-                repository, req, null, RefOrder.ALPHABETICAL);
+            Page<? extends Branch> branchPage = repositoryMetadataService.getBranches(rbr, req);
+
             for (Branch b : branchPage.getValues()) {
                 branchMap.put(b.getId(), b);
             }
@@ -74,12 +80,12 @@ public class RepositoryServiceManagerImpl implements RepositoryServiceManager {
     }
 
     @Override
-    public RepositoryService getRepositoryService () {
+    public RepositoryService getRepositoryService() {
         return repositoryService;
     }
 
     @Override
-    public RepositoryMetadataService getRepositoryMetadataService () {
+    public RepositoryMetadataService getRepositoryMetadataService() {
         return repositoryMetadataService;
     }
 

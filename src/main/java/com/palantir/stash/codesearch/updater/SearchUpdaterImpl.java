@@ -1,28 +1,22 @@
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.scm.git.GitScm;
-import com.google.common.collect.ImmutableMap;
-import com.palantir.stash.codesearch.admin.GlobalSettings;
-import com.palantir.stash.codesearch.admin.RepositorySettings;
-import com.palantir.stash.codesearch.admin.SettingsManager;
-import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
-import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
-import com.palantir.stash.codesearch.search.SearchFilters;
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.ES_SEARCHALIAS;
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.ES_UPDATEALIAS;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.PatternSyntaxException;
+
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
@@ -32,25 +26,37 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
+import com.atlassian.stash.repository.Branch;
+import com.atlassian.stash.repository.Repository;
+import com.atlassian.stash.scm.git.GitScm;
+import com.palantir.stash.codesearch.admin.GlobalSettings;
+import com.palantir.stash.codesearch.admin.RepositorySettings;
+import com.palantir.stash.codesearch.admin.SettingsManager;
+import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
+import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
+import com.palantir.stash.codesearch.search.SearchFilters;
 
 public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
     private static class ResizableSemaphore extends Semaphore {
+
         private int curSize = 0;
-        public ResizableSemaphore (int permits) {
+
+        public ResizableSemaphore(int permits) {
             super(permits);
             curSize = permits;
         }
-        public ResizableSemaphore (int permits, boolean fairness) {
+
+        public ResizableSemaphore(int permits, boolean fairness) {
             super(permits, fairness);
             curSize = permits;
         }
-        public int getCurSize () {
+
+        public int getCurSize() {
             return curSize;
         }
-        public void resize (int newSize) {
+
+        public void resize(int newSize) {
             if (newSize > curSize) {
                 release(newSize - curSize);
             } else if (newSize < curSize) {
@@ -100,12 +106,12 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
     private final ScheduledThreadPoolExecutor jobPool;
 
-    public SearchUpdaterImpl (
-            ElasticSearch es,
-            GitScm gitScm,
-            SettingsManager settingsManager,
-            RepositoryServiceManager repositoryServiceManager,
-            SearchUpdateJobFactory jobFactory) {
+    public SearchUpdaterImpl(
+        ElasticSearch es,
+        GitScm gitScm,
+        SettingsManager settingsManager,
+        RepositoryServiceManager repositoryServiceManager,
+        SearchUpdateJobFactory jobFactory) {
         this.es = es;
         this.gitScm = gitScm;
         this.settingsManager = settingsManager;
@@ -124,7 +130,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     // Return the name of the index pointed to by an alias (null if no index found)
-    private String getIndexFromAlias (String alias) {
+    private String getIndexFromAlias(String alias) {
         ImmutableOpenMap<String, List<AliasMetaData>> aliasMap =
             es.getClient().admin().indices().prepareGetAliases(alias).get().getAliases();
         for (String index : aliasMap.keys().toArray(String.class)) {
@@ -142,7 +148,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
      * a new index will be created even if the alias is already assigned. Returns true iff a new
      * index was created.
      */
-    private synchronized boolean initializeAliasedIndex (String alias, boolean overwrite) {
+    private synchronized boolean initializeAliasedIndex(String alias, boolean overwrite) {
         String prevIndex = getIndexFromAlias(alias);
         if (!overwrite && prevIndex != null) {
             return false;
@@ -155,172 +161,172 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 .addMapping("latestindexed",
                     jsonBuilder().startObject()
                         .startObject("properties")
-                            .startObject("project")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("repository")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("ref")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("hash")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
+                        .startObject("project")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
                         .endObject()
-                    .endObject())
+                        .startObject("repository")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("ref")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("hash")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .endObject()
+                        .endObject())
                 // Commit schema
                 .addMapping("commit",
                     jsonBuilder().startObject()
                         .startObject("properties")
-                            .startObject("project")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("repository")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("refs")
-                                .field("type", "multi_field")
-                                .startObject("fields")
-                                    .startObject("refs")
-                                        .field("type", "string")
-                                        .field("index_analyzer", "ref_analyzer")
-                                        .field("search_analyzer", "ref_analyzer")
-                                    .endObject()
-                                    .startObject("untouched")
-                                        .field("type", "string")
-                                        .field("index", "not_analyzed")
-                                    .endObject()
-                                .endObject()
-                            .endObject()
-                            .startObject("authorname")
-                                .field("type", "string")
-                                .field("index_analyzer", "name_analyzer")
-                                .field("search_analyzer", "name_analyzer")
-                            .endObject()
-                            .startObject("authoremail")
-                                .field("type", "multi_field")
-                                .startObject("fields")
-                                    .startObject("authoremail")
-                                        .field("type", "string")
-                                        .field("index_analyzer", "email_analyzer")
-                                        .field("search_analyzer", "email_analyzer")
-                                    .endObject()
-                                    .startObject("untouched")
-                                        .field("type", "string")
-                                        .field("index", "not_analyzed")
-                                    .endObject()
-                                .endObject()
-                            .endObject()
-                            .startObject("body")
-                                .field("type", "string")
-                            .endObject()
-                            .startObject("subject")
-                                .field("type", "string")
-                            .endObject()
-                            .startObject("commitdate")
-                                .field("type", "date")
-                                .field("format", "date_time")
-                            .endObject()
-                            .startObject("hash")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
+                        .startObject("project")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
                         .endObject()
-                    .endObject())
+                        .startObject("repository")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("refs")
+                        .field("type", "multi_field")
+                        .startObject("fields")
+                        .startObject("refs")
+                        .field("type", "string")
+                        .field("index_analyzer", "ref_analyzer")
+                        .field("search_analyzer", "ref_analyzer")
+                        .endObject()
+                        .startObject("untouched")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .endObject()
+                        .endObject()
+                        .startObject("authorname")
+                        .field("type", "string")
+                        .field("index_analyzer", "name_analyzer")
+                        .field("search_analyzer", "name_analyzer")
+                        .endObject()
+                        .startObject("authoremail")
+                        .field("type", "multi_field")
+                        .startObject("fields")
+                        .startObject("authoremail")
+                        .field("type", "string")
+                        .field("index_analyzer", "email_analyzer")
+                        .field("search_analyzer", "email_analyzer")
+                        .endObject()
+                        .startObject("untouched")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .endObject()
+                        .endObject()
+                        .startObject("body")
+                        .field("type", "string")
+                        .endObject()
+                        .startObject("subject")
+                        .field("type", "string")
+                        .endObject()
+                        .startObject("commitdate")
+                        .field("type", "date")
+                        .field("format", "date_time")
+                        .endObject()
+                        .startObject("hash")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .endObject()
+                        .endObject())
                 // File schema
                 .addMapping("file",
                     jsonBuilder().startObject()
                         .startObject("properties")
-                            .startObject("project")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("repository")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("refs")
-                                .field("type", "multi_field")
-                                .startObject("fields")
-                                    .startObject("refs")
-                                        .field("type", "string")
-                                        .field("index_analyzer", "ref_analyzer")
-                                        .field("search_analyzer", "ref_analyzer")
-                                    .endObject()
-                                    .startObject("untouched")
-                                        .field("type", "string")
-                                        .field("index", "not_analyzed")
-                                    .endObject()
-                                .endObject()
-                            .endObject()
-                            .startObject("blob")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("path")
-                                .field("type", "string")
-                                .field("index_analyzer", "path_analyzer")
-                                .field("search_analyzer", "path_analyzer")
-                            .endObject()
-                            .startObject("extension")
-                                .field("type", "string")
-                                .field("index", "not_analyzed")
-                            .endObject()
-                            .startObject("contents")
-                                .field("type", "string")
-                                .field("index_analyzer", "code_analyzer")
-                                .field("search_analyzer", "code_analyzer")
-                            .endObject()
-                            .startObject("charcount")
-                                .field("type", "integer")
-                                .startObject("fielddata")
-                                    .field("format", "doc_values")
-                                .endObject()
-                            .endObject()
-                            .startObject("linecount")
-                                .field("type", "integer")
-                                .startObject("fielddata")
-                                    .field("format", "doc_values")
-                                .endObject()
-                            .endObject()
+                        .startObject("project")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
                         .endObject()
-                    .endObject())
+                        .startObject("repository")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("refs")
+                        .field("type", "multi_field")
+                        .startObject("fields")
+                        .startObject("refs")
+                        .field("type", "string")
+                        .field("index_analyzer", "ref_analyzer")
+                        .field("search_analyzer", "ref_analyzer")
+                        .endObject()
+                        .startObject("untouched")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .endObject()
+                        .endObject()
+                        .startObject("blob")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("path")
+                        .field("type", "string")
+                        .field("index_analyzer", "path_analyzer")
+                        .field("search_analyzer", "path_analyzer")
+                        .endObject()
+                        .startObject("extension")
+                        .field("type", "string")
+                        .field("index", "not_analyzed")
+                        .endObject()
+                        .startObject("contents")
+                        .field("type", "string")
+                        .field("index_analyzer", "code_analyzer")
+                        .field("search_analyzer", "code_analyzer")
+                        .endObject()
+                        .startObject("charcount")
+                        .field("type", "integer")
+                        .startObject("fielddata")
+                        .field("format", "doc_values")
+                        .endObject()
+                        .endObject()
+                        .startObject("linecount")
+                        .field("type", "integer")
+                        .startObject("fielddata")
+                        .field("format", "doc_values")
+                        .endObject()
+                        .endObject()
+                        .endObject()
+                        .endObject())
                 .setSettings(
                     jsonBuilder().startObject()
                         .startObject("analysis")
-                            .startObject("analyzer")
-                                .startObject("email_analyzer")
-                                    .field("type", "pattern")
-                                    .field("pattern", "[^A-Za-z0-9_]+")
-                                .endObject()
-                                .startObject("name_analyzer")
-                                    .field("type", "pattern")
-                                    .field("pattern", "[^A-Za-z0-9_]+")
-                                .endObject()
-                                .startObject("ref_analyzer")
-                                    .field("type", "pattern")
-                                    .field("pattern", "/")
-                                .endObject()
-                                .startObject("code_analyzer")
-                                    .field("type", "pattern")
-                                    .field("pattern", "[^A-Za-z0-9_]+")
-                                .endObject()
-                                .startObject("path_analyzer")
-                                    .field("type", "pattern")
-                                    .field("pattern", "[/\\\\.]")
-                                .endObject()
-                            .endObject()
-                            .startObject("filter")
-                            .endObject()
+                        .startObject("analyzer")
+                        .startObject("email_analyzer")
+                        .field("type", "pattern")
+                        .field("pattern", "[^A-Za-z0-9_]+")
                         .endObject()
-                    .endObject())
+                        .startObject("name_analyzer")
+                        .field("type", "pattern")
+                        .field("pattern", "[^A-Za-z0-9_]+")
+                        .endObject()
+                        .startObject("ref_analyzer")
+                        .field("type", "pattern")
+                        .field("pattern", "/")
+                        .endObject()
+                        .startObject("code_analyzer")
+                        .field("type", "pattern")
+                        .field("pattern", "[^A-Za-z0-9_]+")
+                        .endObject()
+                        .startObject("path_analyzer")
+                        .field("type", "pattern")
+                        .field("pattern", "[/\\\\.]")
+                        .endObject()
+                        .endObject()
+                        .startObject("filter")
+                        .endObject()
+                        .endObject()
+                        .endObject())
                 .get();
         } catch (Exception e) {
             log.error("Caught exception while creating {} ({}), aborting", newIndex, alias, e);
@@ -340,7 +346,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
      * Makes one alias point to another's index, deleting the old index afterwards. Returns true
      * iff the operation was successful.
      */
-    private synchronized boolean redirectAndDeleteAliasedIndex (String fromAlias, String toAlias) {
+    private synchronized boolean redirectAndDeleteAliasedIndex(String fromAlias, String toAlias) {
         // Find indices corresponding to aliases
         String fromIndex = getIndexFromAlias(fromAlias);
         String toIndex = getIndexFromAlias(toAlias);
@@ -371,7 +377,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     // Acquire a lock on an update job
-    private void acquireLock (SearchUpdateJob job) {
+    private void acquireLock(SearchUpdateJob job) {
         synchronized (runningJobs) {
             while (runningJobs.contains(job)) {
                 try {
@@ -385,7 +391,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     // Release a lock on an update job
-    private void releaseLock (SearchUpdateJob job) {
+    private void releaseLock(SearchUpdateJob job) {
         synchronized (runningJobs) {
             runningJobs.remove(job);
             runningJobs.notifyAll();
@@ -395,10 +401,11 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     /**
      * Returns a new runnable that executes a search updater job.
      */
-    private Runnable getJobRunnable (final SearchUpdateJob job, final boolean reindex) {
-        return new Runnable () {
+    private Runnable getJobRunnable(final SearchUpdateJob job, final boolean reindex) {
+        return new Runnable() {
+
             @Override
-            public void run () {
+            public void run() {
                 acquireLock(job);
                 semaphore.acquireUninterruptibly();
                 try {
@@ -424,18 +431,38 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     // Returns a dummy finished Future object
-    private Future getFinishedFuture () {
+    private Future getFinishedFuture() {
         return new Future() {
-            @Override public boolean cancel (boolean whatever) { return false; }
-            @Override public Void get () { return null; }
-            @Override public Void get (long timeout, TimeUnit unit) { return null; }
-            @Override public boolean isCancelled () { return false; }
-            @Override public boolean isDone () { return false; }
+
+            @Override
+            public boolean cancel(boolean whatever) {
+                return false;
+            }
+
+            @Override
+            public Void get() {
+                return null;
+            }
+
+            @Override
+            public Void get(long timeout, TimeUnit unit) {
+                return null;
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
+
+            @Override
+            public boolean isDone() {
+                return false;
+            }
         };
     }
 
-    private Future submitAsyncUpdateImpl (Repository repository, String ref,
-            int delayMs, boolean reindex) {
+    private Future submitAsyncUpdateImpl(Repository repository, String ref,
+        int delayMs, boolean reindex) {
         RepositorySettings repositorySettings = settingsManager.getRepositorySettings(repository);
         String refRegex = repositorySettings.getRefRegex();
         try {
@@ -444,11 +471,12 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 defaultBranch = repositoryServiceManager.getRepositoryMetadataService()
                     .getDefaultBranch(repository)
                     .getId();
-            } catch (Exception e) {} // No default branch
+            } catch (Exception e) {
+            } // No default branch
             if (!ref.matches(refRegex) &&
-                    (defaultBranch == null ||
-                     !ref.equals(defaultBranch) ||
-                     !"HEAD".matches(refRegex))) {
+                (defaultBranch == null ||
+                    !ref.equals(defaultBranch) ||
+                !"HEAD".matches(refRegex))) {
                 log.debug("Skipping {}/{}:{} (doesn't match {})",
                     repository.getProject().getKey(), repository.getSlug(), ref, refRegex);
                 return getFinishedFuture();
@@ -468,7 +496,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     // Waits uninterruptibly for a future to be satisfied
-    private void waitForFuture (Future future) {
+    private void waitForFuture(Future future) {
         boolean done = false;
         while (!done) {
             try {
@@ -484,32 +512,32 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         }
     }
 
-    private void submitUpdateImpl (Repository repository, String ref, int delayMs,
-            boolean reindex) {
+    private void submitUpdateImpl(Repository repository, String ref, int delayMs,
+        boolean reindex) {
         waitForFuture(submitAsyncUpdateImpl(repository, ref, delayMs, reindex));
     }
 
     @Override
-    public Future submitAsyncUpdate (Repository repository, String ref, int delayMs) {
+    public Future submitAsyncUpdate(Repository repository, String ref, int delayMs) {
         return submitAsyncUpdateImpl(repository, ref, delayMs, false);
     }
 
     @Override
-    public Future submitAsyncReindex (Repository repository, String ref, int delayMs) {
+    public Future submitAsyncReindex(Repository repository, String ref, int delayMs) {
         return submitAsyncUpdateImpl(repository, ref, delayMs, true);
     }
 
     @Override
-    public void submitUpdate (Repository repository, String ref, int delayMs) {
+    public void submitUpdate(Repository repository, String ref, int delayMs) {
         submitUpdateImpl(repository, ref, delayMs, false);
     }
 
     @Override
-    public void submitReindex (Repository repository, String ref, int delayMs) {
+    public void submitReindex(Repository repository, String ref, int delayMs) {
         submitUpdateImpl(repository, ref, delayMs, true);
     }
 
-    private void runWithBlockedJobPool (Runnable runnable) {
+    private void runWithBlockedJobPool(Runnable runnable) {
         jobPoolBlocked.incrementAndGet();
         try {
             int zeroJobIntervals = 0;
@@ -532,7 +560,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     @Override
-    public boolean reindexRepository (final String projectKey, final String repositorySlug) {
+    public boolean reindexRepository(final String projectKey, final String repositorySlug) {
         GlobalSettings globalSettings = settingsManager.getGlobalSettings();
         if (!globalSettings.getIndexingEnabled()) {
             log.warn("Not performing a repository reindex triggered since indexing is disabled");
@@ -542,8 +570,8 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
         // Delete documents for this repository
         log.warn("Deleting {}^{} for manual reindexing", projectKey, repositorySlug);
-        for (int i = 0; i < 5; ++i) {  // since ES doesn't have a refresh setting for delete by
-                                       // query requests, we just spam multiple requests.
+        for (int i = 0; i < 5; ++i) { // since ES doesn't have a refresh setting for delete by
+                                      // query requests, we just spam multiple requests.
             es.getClient().prepareDeleteByQuery(ES_UPDATEALIAS)
                 .setRouting(projectKey + '^' + repositorySlug)
                 .setQuery(QueryBuilders.filteredQuery(
@@ -559,7 +587,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         log.warn("Deletion of {}^{} completed", projectKey, repositorySlug);
 
         // Search for repository
-        Repository repository = repositoryServiceManager.getRepositoryService().findBySlug(
+        Repository repository = repositoryServiceManager.getRepositoryService().getBySlug(
             projectKey, repositorySlug);
         if (repository == null) {
             log.warn("Repository {}^{} not found for manual reindexing", projectKey, repositorySlug);
@@ -581,7 +609,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     @Override
-    public boolean reindexAll () {
+    public boolean reindexAll() {
         GlobalSettings globalSettings = settingsManager.getGlobalSettings();
         if (!globalSettings.getIndexingEnabled()) {
             log.warn("Not performing a complete reindex since indexing is disabled");
@@ -593,7 +621,9 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         }
         try {
             runWithBlockedJobPool(new Runnable() {
-                @Override public void run () {
+
+                @Override
+                public void run() {
                     initializeAliasedIndex(ES_UPDATEALIAS, true);
                 }
             });
@@ -630,11 +660,11 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     @Override
-    public void refreshConcurrencyLimit () {
+    public void refreshConcurrencyLimit() {
         synchronized (semaphore) {
             int prevConcurrencyLimit = concurrencyLimit;
             concurrencyLimit = settingsManager.getGlobalSettings().getMaxConcurrentIndexing();
-            if (prevConcurrencyLimit == concurrencyLimit)  {
+            if (prevConcurrencyLimit == concurrencyLimit) {
                 return;
             }
             log.warn("Attempting to change concurrency limit from {} to {}",
@@ -646,7 +676,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     @Override
-    public void destroy () {
+    public void destroy() {
         jobPool.shutdown();
     }
 

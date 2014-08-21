@@ -4,12 +4,64 @@
 
 package com.palantir.stash.codesearch.search;
 
-import com.atlassian.plugin.webresource.WebResourceManager;
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.ES_SEARCHALIAS;
+import static org.elasticsearch.index.query.FilterBuilders.andFilter;
+import static org.elasticsearch.index.query.FilterBuilders.boolFilter;
+import static org.elasticsearch.index.query.FilterBuilders.matchAllFilter;
+import static org.elasticsearch.index.query.FilterBuilders.typeFilter;
+import static org.elasticsearch.index.query.QueryBuilders.filteredQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+import static org.elasticsearch.index.query.QueryBuilders.queryString;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.cardinality;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.extendedStats;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.filter;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.percentiles;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Map;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.search.ShardSearchFailure;
+import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilteredQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryStringQueryBuilder;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.filter.Filter;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
+import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
+import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
+import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
+import org.elasticsearch.search.highlight.HighlightField;
+import org.joda.time.DateTimeZone;
+import org.joda.time.MutableDateTime;
+import org.joda.time.ReadableInstant;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.atlassian.soy.renderer.SoyTemplateRenderer;
 import com.atlassian.stash.exception.AuthorisationException;
+import com.atlassian.stash.repository.Repository;
 import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.*;
-import com.atlassian.stash.repository.*;
+import com.atlassian.stash.user.Permission;
+import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.webresource.api.assembler.PageBuilderService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -18,38 +70,13 @@ import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import javax.servlet.*;
-import javax.servlet.http.*;
-import org.apache.commons.io.FilenameUtils;
-import org.elasticsearch.action.search.*;
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.index.query.*;
-import org.elasticsearch.search.*;
-import org.elasticsearch.search.aggregations.*;
-import org.elasticsearch.search.aggregations.bucket.filter.Filter;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
-import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
-import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
-import org.elasticsearch.search.highlight.*;
-import org.joda.time.*;
-import org.joda.time.format.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
-import static org.elasticsearch.common.xcontent.XContentFactory.*;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.*;
-import static org.elasticsearch.index.query.FilterBuilders.*;
-import static org.elasticsearch.index.query.QueryBuilders.*;
 
 public class SearchServlet extends HttpServlet {
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(SearchServlet.class);
 
@@ -59,7 +86,7 @@ public class SearchServlet extends HttpServlet {
 
     private static final DateTimeFormatter TIME_PRINTER = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm");
 
-    private static final double[] PERCENTILES = {1.0, 5.0, 25.0, 50.0, 75.0, 95.0, 99.0};
+    private static final double[] PERCENTILES = { 1.0, 5.0, 25.0, 50.0, 75.0, 95.0, 99.0 };
 
     private final ApplicationPropertiesService propertiesService;
 
@@ -73,26 +100,26 @@ public class SearchServlet extends HttpServlet {
 
     private final SoyTemplateRenderer soyTemplateRenderer;
 
-    private final WebResourceManager resourceManager;
+    private final PageBuilderService pbs;
 
-    public SearchServlet (
-            ApplicationPropertiesService propertiesService,
-            ElasticSearch es,
-            SettingsManager settingsManager,
-            PermissionValidationService validationService,
-            RepositoryServiceManager repositoryServiceManager,
-            SoyTemplateRenderer soyTemplateRenderer,
-            WebResourceManager resourceManager) {
+    public SearchServlet(
+        ApplicationPropertiesService propertiesService,
+        ElasticSearch es,
+        SettingsManager settingsManager,
+        PermissionValidationService validationService,
+        RepositoryServiceManager repositoryServiceManager,
+        SoyTemplateRenderer soyTemplateRenderer,
+        PageBuilderService pbs) {
         this.propertiesService = propertiesService;
         this.es = es;
         this.settingsManager = settingsManager;
         this.validationService = validationService;
         this.repositoryServiceManager = repositoryServiceManager;
         this.soyTemplateRenderer = soyTemplateRenderer;
-        this.resourceManager = resourceManager;
+        this.pbs = pbs;
     }
 
-    private String getStringFromMap (Map<String, ? extends Object> map, String key) {
+    private String getStringFromMap(Map<String, ? extends Object> map, String key) {
         Object o = map.get(key);
         if (o == null) {
             return "";
@@ -100,7 +127,7 @@ public class SearchServlet extends HttpServlet {
         return o.toString();
     }
 
-    private String getDateStringFromMap (Map<String, ? extends Object> map, String key) {
+    private String getDateStringFromMap(Map<String, ? extends Object> map, String key) {
         Object o = map.get(key);
         if (o == null) {
             return "";
@@ -113,12 +140,14 @@ public class SearchServlet extends HttpServlet {
     }
 
     // Returns map view of search hits for soy templates
-    private ImmutableMap<String, Object> searchHitToDataMap (
-            SearchHit hit,
-            Map<String, Repository> repoMap,  // null iff no permission validation required
-            int maxPreviewLines,
-            int maxMatchLines,
-            ImmutableSet<String> noHighlight) {
+    // Not sure this is actually safe at all.  Jerry thought so.
+    @SuppressWarnings("unchecked")
+    private ImmutableMap<String, Object> searchHitToDataMap(
+        SearchHit hit,
+        Map<String, Repository> repoMap, // null iff no permission validation required
+        int maxPreviewLines,
+        int maxMatchLines,
+        ImmutableSet<String> noHighlight) {
         ImmutableMap.Builder<String, Object> hitData = new ImmutableMap.Builder<String, Object>();
         Map<String, Object> hitSource = hit.getSource();
 
@@ -134,21 +163,21 @@ public class SearchServlet extends HttpServlet {
         // Validate permissions & build hit data map
         String repoId = project + "^" + repository;
         Repository repoObject;
-        if (repoMap == null) {  // current user is system administrator
-            repoObject = repositoryServiceManager.getRepositoryService().findBySlug(
+        if (repoMap == null) { // current user is system administrator
+            repoObject = repositoryServiceManager.getRepositoryService().getBySlug(
                 project, repository);
-        } else {  // must validate against allowed repositories for non-administrators
+        } else { // must validate against allowed repositories for non-administrators
             repoObject = repoMap.get(repoId);
         }
 
         if (repoObject != null &&
-                repoObject.getProject().getKey().equals(project) &&
-                repoObject.getSlug().equals(repository)) {
+            repoObject.getProject().getKey().equals(project) &&
+            repoObject.getSlug().equals(repository)) {
 
             // Generate refs array
             ImmutableSortedSet<String> refSet;
             try {
-                refSet = ImmutableSortedSet.copyOf((Iterable <String>) hitSource.get("refs"));
+                refSet = ImmutableSortedSet.copyOf((Iterable<String>) hitSource.get("refs"));
             } catch (Exception e) {
                 log.warn("Invalid refs collection detected for element in {}/{}", project, repository, e);
                 return null;
@@ -205,8 +234,8 @@ public class SearchServlet extends HttpServlet {
     }
 
     @Override
-    protected void doGet (HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+        throws ServletException, IOException {
 
         // Make sure user is logged in
         try {
@@ -215,7 +244,7 @@ public class SearchServlet extends HttpServlet {
             try {
                 resp.sendRedirect(propertiesService.getLoginUri(URI.create(req.getRequestURL() +
                     (req.getQueryString() == null ? "" : "?" + req.getQueryString())
-                )).toASCIIString());
+                    )).toASCIIString());
             } catch (Exception e) {
                 log.error("Unable to redirect unauthenticated user to login page", e);
             }
@@ -307,7 +336,7 @@ public class SearchServlet extends HttpServlet {
                         SearchFilters.repositoryFilter(params.repoNames.split(",")),
                         SearchFilters.extensionFilter(params.extensions.split(",")),
                         SearchFilters.authorFilter(params.authorNames.split(","))
-                    ),
+                        ),
                     SearchFilters.dateRangeFilter(params.committedAfter, params.committedBefore));
                 FilteredQueryBuilder finalQuery = filteredQuery(query, filter);
                 esReq.setQuery(finalQuery)
@@ -318,12 +347,12 @@ public class SearchServlet extends HttpServlet {
                 String[] typeArray = {};
                 if (params.searchCommits) {
                     if (params.searchFilenames || params.searchCode) {
-                        typeArray = new String[]{"commit", "file"};
+                        typeArray = new String[] { "commit", "file" };
                     } else {
-                        typeArray = new String[]{"commit"};
+                        typeArray = new String[] { "commit" };
                     }
                 } else if (params.searchFilenames || params.searchCode) {
-                    typeArray = new String[]{"file"};
+                    typeArray = new String[] { "file" };
                 }
                 esReq.setTypes(typeArray);
 
@@ -358,7 +387,7 @@ public class SearchServlet extends HttpServlet {
                 if (esResp != null) {
                     SearchHits esHits = esResp.getHits();
                     totalHits = esHits.getTotalHits();
-                    pages = (int) Math.min((long) Integer.MAX_VALUE, (totalHits + pageSize - 1) / pageSize);
+                    pages = (int) Math.min(Integer.MAX_VALUE, (totalHits + pageSize - 1) / pageSize);
                     currentHits = esHits.getHits();
                     searchTime = esResp.getTookInMillis();
                     for (ShardSearchFailure failure : esResp.getShardFailures()) {
@@ -420,15 +449,13 @@ public class SearchServlet extends HttpServlet {
         }
 
         // Render page
-        resourceManager.requireResource("com.palantir.stash.stash-code-search:scs-resources");
-        resourceManager.requireResource("com.atlassian.auiplugin:aui-date-picker");
-        resourceManager.requireResource("com.atlassian.auiplugin:aui-experimental-tooltips");
+        pbs.assembler().resources().requireContext("com.atlassian.auiplugin:aui-date-picker");
+        pbs.assembler().resources().requireContext("com.atlassian.auiplugin:aui-experimental-tooltips");
         resp.setContentType("text/html");
         try {
             String queryString = req.getQueryString();
             String fullUri = req.getRequestURI() + "?" +
                 (queryString == null ? "" : queryString.replaceAll("&?page=\\d*", ""));
-            int startIndex = fullUri.indexOf("/plugins/");
             ImmutableMap<String, Object> data = new ImmutableMap.Builder<String, Object>()
                 .put("pages", pages)
                 .put("currentPage", params.page)
@@ -454,11 +481,11 @@ public class SearchServlet extends HttpServlet {
     }
 
     // Generates a list of percentile aggregation entries for Soy
-    private static ImmutableList<ImmutableMap<String, Object>> getSoyPercentileList (
-            Percentiles aggregation, double... percentiles) {
+    private static ImmutableList<ImmutableMap<String, Object>> getSoyPercentileList(
+        Percentiles aggregation, double... percentiles) {
         ImmutableList.Builder<ImmutableMap<String, Object>> builder = ImmutableList.builder();
         for (double percentile : percentiles) {
-            builder.add(ImmutableMap.<String, Object>of(
+            builder.add(ImmutableMap.<String, Object> of(
                 "percentile", percentile,
                 "value", aggregation.percentile(percentile)));
         }
@@ -466,21 +493,21 @@ public class SearchServlet extends HttpServlet {
     }
 
     // Generate a list of ranking aggregation entries for Soy
-    private static ImmutableList<ImmutableMap<String, Object>> getSoyRankingList (
-            Terms aggregation, long totalCount) {
+    private static ImmutableList<ImmutableMap<String, Object>> getSoyRankingList(
+        Terms aggregation, long totalCount) {
         ImmutableList.Builder<ImmutableMap<String, Object>> builder = ImmutableList.builder();
         long otherCount = totalCount;
         for (Terms.Bucket bucket : aggregation.getBuckets()) {
             String key = bucket.getKey();
             long count = bucket.getDocCount();
             otherCount -= count;
-            builder.add(ImmutableMap.<String, Object>of(
+            builder.add(ImmutableMap.<String, Object> of(
                 "key", key,
                 "count", count,
                 "proportion", ((double) count) / totalCount));
         }
         if (otherCount > 0) {
-            builder.add(ImmutableMap.<String, Object>of(
+            builder.add(ImmutableMap.<String, Object> of(
                 "other", true,
                 "key", "Other",
                 "count", otherCount,
@@ -488,7 +515,6 @@ public class SearchServlet extends HttpServlet {
         }
         return builder.build();
     }
-
 
     // Utility class for parsing and storing search parameters from an http request
     private static class SearchParams {
@@ -504,18 +530,16 @@ public class SearchServlet extends HttpServlet {
         public final String refNames;
         public final String extensions;
         public final String authorNames;
-        public final String committedAfterStr;
-        public final String committedBeforeStr;
         public final int page;
         public final ReadableInstant committedAfter;
         public final ReadableInstant committedBefore;
         public final ImmutableMap<String, Object> soyParams;
 
-        private SearchParams (boolean doSearch, String searchString, boolean showStatistics,
-                boolean searchCode, boolean searchFilenames, boolean searchCommits,
-                String projectKeys, String repoNames, String refNames, String extensions,
-                String authorNames, int page, String committedAfterStr, String committedBeforeStr,
-                DateTimeZone tz) {
+        private SearchParams(boolean doSearch, String searchString, boolean showStatistics,
+            boolean searchCode, boolean searchFilenames, boolean searchCommits,
+            String projectKeys, String repoNames, String refNames, String extensions,
+            String authorNames, int page, String committedAfterStr, String committedBeforeStr,
+            DateTimeZone tz) {
             this.doSearch = doSearch;
             this.searchString = searchString;
             this.showStatistics = showStatistics;
@@ -528,8 +552,6 @@ public class SearchServlet extends HttpServlet {
             this.extensions = extensions;
             this.authorNames = authorNames;
             this.page = page;
-            this.committedAfterStr = committedAfterStr;
-            this.committedBeforeStr = committedBeforeStr;
             ImmutableMap.Builder<String, Object> paramBuilder = new ImmutableMap.Builder<String, Object>()
                 .put("searchString", searchString)
                 .put("showStatistics", showStatistics)
@@ -552,7 +574,7 @@ public class SearchServlet extends HttpServlet {
                 afterDateTime.setSecondOfDay(0);
                 afterDateTime.setMillisOfSecond(0);
             } catch (Exception e) {
-                afterDateTime= null;
+                afterDateTime = null;
             }
             this.committedAfter = afterDateTime;
 
@@ -569,7 +591,7 @@ public class SearchServlet extends HttpServlet {
             this.committedBefore = beforeDateTime;
         }
 
-        public static SearchParams getParams (HttpServletRequest req, DateTimeZone tz) {
+        public static SearchParams getParams(HttpServletRequest req, DateTimeZone tz) {
             boolean doSearch = true;
 
             String searchString = req.getParameter("searchString");

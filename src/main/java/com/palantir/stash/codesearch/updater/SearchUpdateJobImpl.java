@@ -5,34 +5,35 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.scm.git.*;
+import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.ES_UPDATEALIAS;
+import static com.palantir.stash.codesearch.search.SearchFilters.exactRefFilter;
+import static com.palantir.stash.codesearch.search.SearchFilters.projectRepositoryFilter;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.elasticsearch.index.query.FilterBuilders.andFilter;
+import static org.elasticsearch.index.query.QueryBuilders.filteredQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+
+import java.util.AbstractMap.SimpleEntry;
+import java.util.Date;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import org.apache.commons.io.FilenameUtils;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.update.UpdateRequestBuilder;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.search.SearchHit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.atlassian.stash.repository.Repository;
+import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
+import com.atlassian.stash.scm.git.GitScm;
 import com.google.common.collect.ImmutableList;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.elasticsearch.RequestBuffer;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang.ArrayUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.elasticsearch.action.bulk.*;
-import org.elasticsearch.action.search.*;
-import org.elasticsearch.action.update.UpdateRequestBuilder;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.search.SearchHit;
-
-import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.*;
-import static com.palantir.stash.codesearch.search.SearchFilters.*;
-import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.index.query.FilterBuilders.*;
-import static org.elasticsearch.index.query.QueryBuilders.*;
 
 class SearchUpdateJobImpl implements SearchUpdateJob {
 
@@ -40,21 +41,19 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     private static final String EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-    private static final String NULL_HASH = "0000000000000000000000000000000000000000";
-
     private static final int MAX_ES_RETRIES = 10;
 
     private final Repository repository;
 
     private final String ref;
 
-    public SearchUpdateJobImpl (Repository repository, String ref) {
+    public SearchUpdateJobImpl(Repository repository, String ref) {
         this.repository = repository;
         this.ref = ref;
     }
 
     @Override
-    public boolean equals (Object o) {
+    public boolean equals(Object o) {
         if (!(o instanceof SearchUpdateJobImpl) || o == null) {
             return false;
         }
@@ -65,26 +64,26 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     @Override
-    public int hashCode () {
+    public int hashCode() {
         return toString().hashCode();
     }
 
-    private String getRepoDesc () {
+    private String getRepoDesc() {
         return repository.getProject().getKey() + "^" + repository.getSlug();
     }
 
     @Override
-    public String toString () {
+    public String toString() {
         return getRepoDesc() + "^" + ref;
     }
 
     @Override
-    public Repository getRepository () {
+    public Repository getRepository() {
         return repository;
     }
 
     @Override
-    public String getRef () {
+    public String getRef() {
         return ref;
     }
 
@@ -95,7 +94,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
      */
 
     // Returns EMPTY_TREE if no commits were indexed before this.
-    private String getLatestIndexedHash (Client client) {
+    private String getLatestIndexedHash(Client client) {
         try {
             String hash = client.prepareGet(ES_UPDATEALIAS, "latestindexed", toString())
                 .setRouting(getRepoDesc())
@@ -111,7 +110,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns true iff successful
-    private boolean deleteLatestIndexedNote (Client client) {
+    private boolean deleteLatestIndexedNote(Client client) {
         try {
             client.prepareDelete(ES_UPDATEALIAS, "latestindexed", toString())
                 .setRouting(getRepoDesc())
@@ -125,16 +124,16 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns true iff successful
-    private boolean addLatestIndexedNote (Client client, String commitHash) {
+    private boolean addLatestIndexedNote(Client client, String commitHash) {
         try {
             client.prepareIndex(ES_UPDATEALIAS, "latestindexed", toString())
                 .setSource(jsonBuilder()
-                .startObject()
+                    .startObject()
                     .field("project", repository.getProject().getKey())
                     .field("repository", repository.getSlug())
                     .field("ref", ref)
                     .field("hash", commitHash)
-                .endObject())
+                    .endObject())
                 .setRouting(getRepoDesc())
                 .get();
         } catch (Exception e) {
@@ -146,7 +145,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns the hash of the latest commit on the job's ref (null if not found)
-    private String getLatestHash (GitCommandBuilderFactory builderFactory) {
+    private String getLatestHash(GitCommandBuilderFactory builderFactory) {
         try {
             String newHash = builderFactory.builder(repository)
                 .command("show-ref")
@@ -166,10 +165,10 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns a request to delete the ref from an arbitrary document with a refs field
-    private UpdateRequestBuilder buildDeleteFromRef (Client client, String type, String id) {
+    private UpdateRequestBuilder buildDeleteFromRef(Client client, String type, String id) {
         return client.prepareUpdate(ES_UPDATEALIAS, type, id)
             .setScript("ctx._source.refs.contains(ref) ? ((ctx._source.refs.size() > 1) " +
-                       "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
+                "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
             .setScriptLang("mvel")
             .addScriptParam("ref", ref)
             .setRetryOnConflict(MAX_ES_RETRIES)
@@ -177,10 +176,10 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns a request to add the ref to an arbitrary document with a refs field
-    private UpdateRequestBuilder buildAddToRef (Client client, String type, String id) {
+    private UpdateRequestBuilder buildAddToRef(Client client, String type, String id) {
         return client.prepareUpdate(ES_UPDATEALIAS, type, id)
             .setScript("ctx._source.refs.contains(ref) " +
-                       "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
+                "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
             .setScriptLang("mvel")
             .addScriptParam("ref", ref)
             .setRetryOnConflict(MAX_ES_RETRIES)
@@ -188,33 +187,33 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     // Returns a request to delete a blob/path pair from the index.
-    private UpdateRequestBuilder buildDeleteFileFromRef (Client client, String blob, String path) {
+    private UpdateRequestBuilder buildDeleteFileFromRef(Client client, String blob, String path) {
         String fileId = getRepoDesc() + "^" + blob + "^:/" + path;
         return buildDeleteFromRef(client, "file", fileId);
     }
 
     // Returns a request to add a file to a ref via an update script. Will fail if document is not
     // in the index.
-    private UpdateRequestBuilder buildAddFileToRef (Client client, String blob, String path) {
+    private UpdateRequestBuilder buildAddFileToRef(Client client, String blob, String path) {
         String fileId = getRepoDesc() + "^" + blob + "^:/" + path;
         return buildAddToRef(client, "file", fileId);
-   }
+    }
 
     // Returns a request to delete a commit from the index.
-    private UpdateRequestBuilder buildDeleteCommitFromRef (Client client, String commitHash) {
+    private UpdateRequestBuilder buildDeleteCommitFromRef(Client client, String commitHash) {
         String commitId = getRepoDesc() + "^" + commitHash;
         return buildDeleteFromRef(client, "commit", commitId);
     }
 
     // Returns a request to add a commit to a ref via an update script. Will fail if document is not
     // in the index.
-    private UpdateRequestBuilder buildAddCommitToRef (Client client, String commitHash) {
+    private UpdateRequestBuilder buildAddCommitToRef(Client client, String commitHash) {
         String commitId = getRepoDesc() + "^" + commitHash;
         return buildAddToRef(client, "commit", commitId);
     }
 
     @Override
-    public void doReindex (Client client, GitScm gitScm, GlobalSettings globalSettings) {
+    public void doReindex(Client client, GitScm gitScm, GlobalSettings globalSettings) {
         if (!globalSettings.getIndexingEnabled()) {
             return;
         }
@@ -246,7 +245,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     }
 
     @Override
-    public void doUpdate (Client client, GitScm gitScm, GlobalSettings globalSettings) {
+    public void doUpdate(Client client, GitScm gitScm, GlobalSettings globalSettings) {
         if (!globalSettings.getIndexingEnabled()) {
             return;
         }
@@ -255,9 +254,6 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
         // List of bulk requests to execute sequentially at the end of the method
         RequestBuffer requestBuffer = new RequestBuffer(client);
-
-        // Unique identifier for repo
-        String repoDesc = getRepoDesc();
 
         // Unique identifier for ref
         String refDesc = toString();
@@ -295,21 +291,22 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 String newBlob = statusToks[3];
 
                 // File added
+                // TODO: so many warnings!  Generics, CAEN I HAZ THEM?
                 if (status.startsWith("A")) {
                     String path = diffToks[++curTok];
                     filesToAdd.add(new SimpleEntry(newBlob, path));
 
-                // File copied
+                    // File copied
                 } else if (status.startsWith("C")) {
                     String toPath = diffToks[curTok += 2];
                     filesToAdd.add(new SimpleEntry(newBlob, toPath));
 
-                // File deleted
+                    // File deleted
                 } else if (status.startsWith("D")) {
                     String path = diffToks[++curTok];
                     requestBuffer.add(buildDeleteFileFromRef(client, oldBlob, path));
 
-                // File modified
+                    // File modified
                 } else if (status.startsWith("M") || status.startsWith("T")) {
                     String path = diffToks[++curTok];
                     if (!oldBlob.equals(newBlob)) {
@@ -317,14 +314,14 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                         filesToAdd.add(new SimpleEntry(newBlob, path));
                     }
 
-                // File renamed
+                    // File renamed
                 } else if (status.startsWith("R")) {
                     String fromPath = diffToks[++curTok];
                     String toPath = diffToks[++curTok];
                     requestBuffer.add(buildDeleteFileFromRef(client, oldBlob, fromPath));
                     filesToAdd.add(new SimpleEntry(newBlob, toPath));
 
-                // Unknown change
+                    // Unknown change
                 } else if (status.startsWith("X")) {
                     throw new RuntimeException("Status letter 'X' is a git bug.");
                 }
@@ -430,7 +427,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                         requestBuffer.add(buildAddFileToRef(client, blob, path)
                             // Upsert inserts a new document into the index if it does not already exist.
                             .setUpsert(jsonBuilder()
-                            .startObject()
+                                .startObject()
                                 .field("project", repository.getProject().getKey())
                                 .field("repository", repository.getSlug())
                                 .field("blob", blob)
@@ -440,9 +437,9 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                                 .field("charcount", fileContent.length())
                                 .field("linecount", countLines(fileContent))
                                 .startArray("refs")
-                                    .value(ref)
+                                .value(ref)
                                 .endArray()
-                            .endObject()));
+                                .endObject()));
                     }
                     ++count;
                 }
@@ -456,7 +453,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         filesToAdd = null;
 
         // Get deleted commits
-        String [] deletedCommits;
+        String[] deletedCommits;
         try {
             deletedCommits = builderFactory.builder(repository)
                 .command("rev-list")
@@ -480,7 +477,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         }
 
         // Get new commits
-        String [] newCommits;
+        String[] newCommits;
         try {
             newCommits = builderFactory.builder(repository)
                 .command("log")
@@ -505,7 +502,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 if (line.charAt(0) == '\n') {
                     line = line.substring(1);
                 }
-                String [] commitToks = line.split("\u0002", 6);
+                String[] commitToks = line.split("\u0002", 6);
                 String hash = commitToks[0];
                 long timestamp = Long.parseLong(commitToks[1]) * 1000;
                 String authorName = commitToks[2];
@@ -519,21 +516,21 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 // Add commit to request
                 requestBuffer.add(
                     buildAddCommitToRef(client, hash)
-                    .setUpsert(jsonBuilder()
-                    .startObject()
-                        .field("project", repository.getProject().getKey())
-                        .field("repository", repository.getSlug())
-                        .field("hash", hash)
-                        .field("commitdate", new Date(timestamp))
-                        .field("authorname", authorName)
-                        .field("authoremail", authorEmail)
-                        .field("subject", subject)
-                        .field("body", body)
-                        .startArray("refs")
+                        .setUpsert(jsonBuilder()
+                            .startObject()
+                            .field("project", repository.getProject().getKey())
+                            .field("repository", repository.getSlug())
+                            .field("hash", hash)
+                            .field("commitdate", new Date(timestamp))
+                            .field("authorname", authorName)
+                            .field("authoremail", authorEmail)
+                            .field("subject", subject)
+                            .field("body", body)
+                            .startArray("refs")
                             .value(ref)
-                        .endArray()
-                    .endObject())
-                );
+                            .endArray()
+                            .endObject())
+                    );
                 ++commitsAdded;
             } catch (Exception e) {
                 log.warn("Caught error while constructing request object, skipping update", e);
@@ -551,7 +548,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
         addLatestIndexedNote(client, newHash);
     }
 
-    private static final int countLines (String str) {
+    private static final int countLines(String str) {
         char prevChar = '\n', c;
         int count = 0;
         for (int i = 0; i < str.length(); ++i) {

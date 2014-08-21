@@ -4,18 +4,18 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.scm.CommandOutputHandler;
-import com.atlassian.utils.process.Watchdog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class CatFileOutputHandler implements CommandOutputHandler<String[]> {
+import com.atlassian.stash.scm.CommandOutputHandler;
+import com.atlassian.utils.process.Watchdog;
 
-    private static final int BUF_SIZE = 4096;
+class CatFileOutputHandler implements CommandOutputHandler<String[]> {
 
     private static final Logger log = LoggerFactory.getLogger(CatFileOutputHandler.class);
 
@@ -31,7 +31,7 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
         BINARY_BYTES[127] = true;
     }
 
-    private static boolean isBinary (byte b) {
+    private static boolean isBinary(byte b) {
         if (b < 0) {
             return BINARY_BYTES[256 + b];
         }
@@ -44,19 +44,20 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
 
     private int maxFileSize;
 
+    // TODO: unused
     private Watchdog watchdog;
 
-    public CatFileOutputHandler () {
+    public CatFileOutputHandler() {
         this(new ArrayList<Integer>());
     }
 
-    public CatFileOutputHandler (Collection<Integer> fileSizes) {
+    public CatFileOutputHandler(Collection<Integer> fileSizes) {
         this.fileSizes = fileSizes;
         this.outputFiles = new ArrayList<String>();
         this.maxFileSize = 0;
     }
 
-    public boolean addFile (int fileSize) {
+    public boolean addFile(int fileSize) {
         if (fileSizes.add(fileSize)) {
             maxFileSize = Math.max(maxFileSize, fileSize);
         }
@@ -64,28 +65,30 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
     }
 
     @Override
-    public String[] getOutput () {
+    public String[] getOutput() {
         return outputFiles == null ? null : outputFiles.toArray(new String[outputFiles.size()]);
     }
 
     @Override
-    public void complete () {}
+    public void complete() {
+    }
 
     @Override
-    public void setWatchdog (Watchdog watchdog) {
+    public void setWatchdog(Watchdog watchdog) {
         this.watchdog = watchdog;
     }
 
     @Override
-    public void process (InputStream is) {
+    public void process(InputStream is) {
         byte[] buffer = new byte[maxFileSize + 2];
         try {
             for (int fileSize : fileSizes) {
                 // read fileSize bytes
-                is.read();  // clear newline
+                is.read(); // clear newline
                 int offset = 0;
-                while ((offset += is.read(buffer, offset, fileSize - offset)) < fileSize);
-                is.read();  // clear newline
+                while ((offset += is.read(buffer, offset, fileSize - offset)) < fileSize)
+                    ;
+                is.read(); // clear newline
 
                 // Check for binary bytes
                 boolean binary = false;
