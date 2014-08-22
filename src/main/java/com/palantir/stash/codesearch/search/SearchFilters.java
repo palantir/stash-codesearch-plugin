@@ -16,14 +16,13 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.commons.codec.binary.Base64;
 import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.RangeFilterBuilder;
 import org.joda.time.ReadableInstant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import aQute.lib.base64.Base64;
 
 import com.atlassian.stash.repository.Repository;
 import com.google.common.collect.Iterators;
@@ -71,7 +70,7 @@ public class SearchFilters {
                 hasher.update(pair.getBytes());
                 hasher.update((byte) 0);
             }
-            filterHash = Base64.encodeBase64(hasher.digest());
+            filterHash = new String(Base64.encodeBase64(hasher.digest()));
         } catch (Exception e) {
             filterHash = null;
             log.error("Caught exception generating ACL hash -- caching is disabled.", e);

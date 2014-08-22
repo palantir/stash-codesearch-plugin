@@ -141,6 +141,12 @@
             <version>1.8.5</version>
             <scope>test</scope>
         </dependency>
+        <!-- needed for base64 encode -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.9</version>
+        </dependency>
     </dependencies>
     <properties>
         <amps.version>5.0.3</amps.version>
