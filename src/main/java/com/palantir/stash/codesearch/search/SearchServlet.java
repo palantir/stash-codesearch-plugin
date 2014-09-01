@@ -451,6 +451,7 @@ public class SearchServlet extends HttpServlet {
         // Render page
         pbs.assembler().resources().requireContext("com.atlassian.auiplugin:aui-date-picker");
         pbs.assembler().resources().requireContext("com.atlassian.auiplugin:aui-experimental-tooltips");
+        pbs.assembler().resources().requireWebResource("com.palantir.stash.stash-code-search:scs-resources");
         resp.setContentType("text/html");
         try {
             String queryString = req.getQueryString();
