@@ -6,8 +6,6 @@
 package com.palantir.stash.codesearch.updater;
 
 import static com.palantir.stash.codesearch.elasticsearch.ElasticSearch.ES_UPDATEALIAS;
-import static com.palantir.stash.codesearch.search.SearchFilters.exactRefFilter;
-import static com.palantir.stash.codesearch.search.SearchFilters.projectRepositoryFilter;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.FilterBuilders.andFilter;
 import static org.elasticsearch.index.query.QueryBuilders.filteredQuery;
@@ -26,7 +24,6 @@ import org.elasticsearch.action.update.UpdateRequestBuilder;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.search.SearchHit;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.atlassian.stash.repository.Repository;
 import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
@@ -34,10 +31,10 @@ import com.atlassian.stash.scm.git.GitScm;
 import com.google.common.collect.ImmutableList;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.elasticsearch.RequestBuffer;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
+import com.palantir.stash.codesearch.search.SearchFilterUtils;
 
 class SearchUpdateJobImpl implements SearchUpdateJob {
-
-    private static final Logger log = LoggerFactory.getLogger(SearchUpdateJobImpl.class);
 
     private static final String EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
@@ -47,9 +44,16 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
 
     private final String ref;
 
-    public SearchUpdateJobImpl(Repository repository, String ref) {
+    private final PluginLoggerFactory plf;
+    private final Logger log;
+    private final SearchFilterUtils sfu;
+
+    public SearchUpdateJobImpl(SearchFilterUtils sfu, PluginLoggerFactory plf, Repository repository, String ref) {
+        this.plf = plf;
+        this.log = plf.getLogger(this.getClass().toString());
         this.repository = repository;
         this.ref = ref;
+        this.sfu = sfu;
     }
 
     @Override
@@ -151,7 +155,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 .command("show-ref")
                 .argument("--verify")
                 .argument(ref)
-                .build(new StringOutputHandler()).call()
+                .build(new StringOutputHandler(plf)).call()
                 .split("\\s+")[0];
             if (newHash.length() != 40) {
                 log.error("Commit hash {} has invalid length", newHash);
@@ -225,9 +229,9 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     .setFetchSource(false)
                     .setRouting(getRepoDesc())
                     .setQuery(filteredQuery(matchAllQuery(), andFilter(
-                        projectRepositoryFilter(
+                        sfu.projectRepositoryFilter(
                             repository.getProject().getKey(), repository.getSlug()),
-                        exactRefFilter(ref))));
+                        sfu.exactRefFilter(ref))));
                 BulkRequestBuilder bulkDelete = client.prepareBulk().setRefresh(true);
                 for (SearchHit hit : esReq.get().getHits().getHits()) {
                     bulkDelete.add(buildDeleteFromRef(client, hit.getType(), hit.getId()));
@@ -277,7 +281,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 .command("diff")
                 .argument("--raw").argument("--abbrev=40").argument("-z")
                 .argument(prevHash).argument(newHash)
-                .build(new StringOutputHandler()).call()
+                .build(new StringOutputHandler(plf)).call()
                 .split("\u0000");
 
             // Process each diff --raw -z entry
@@ -380,13 +384,13 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     .command("cat-file")
                     .argument("--batch-check")
                     .inputHandler(catFileInput)
-                    .build(new StringOutputHandler()).call()
+                    .build(new StringOutputHandler(plf)).call()
                     .split("\n");
                 if (filesToAdd.size() != catFileMetadata.length) {
                     throw new IndexOutOfBoundsException(
                         "git cat-file --batch-check returned wrong number of lines");
                 }
-                CatFileOutputHandler catFileOutput = new CatFileOutputHandler();
+                CatFileOutputHandler catFileOutput = new CatFileOutputHandler(plf);
                 int count = 0;
                 int maxFileSize = globalSettings.getMaxFileSize();
                 for (SimpleEntry<String, String> bppair : filesToAddCopy) {
@@ -459,7 +463,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 .command("rev-list")
                 .argument(prevHash)
                 .argument("^" + newHash)
-                .build(new StringOutputHandler()).call()
+                .build(new StringOutputHandler(plf)).call()
                 .split("\n+");
         } catch (Exception e) {
             log.error("Caught error while scanning for deleted commits, aborting update", e);
@@ -484,7 +488,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 .argument("--format=%H%x02%ct%x02%an%x02%ae%x02%s%x02%b%x03")
                 .argument(newHash)
                 .argument("^" + prevHash)
-                .build(new StringOutputHandler()).call()
+                .build(new StringOutputHandler(plf)).call()
                 .split("\u0003");
         } catch (Exception e) {
             log.error("Caught error while scanning for new commits, aborting update", e);

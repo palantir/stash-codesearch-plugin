@@ -22,16 +22,20 @@ import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.RangeFilterBuilder;
 import org.joda.time.ReadableInstant;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.atlassian.stash.repository.Repository;
 import com.google.common.collect.Iterators;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 
-public class SearchFilters {
+public class SearchFilterUtils {
 
-    private static final Logger log = LoggerFactory.getLogger(SearchFilters.class);
+    private final Logger log;
 
-    private static <T> Iterable<T> toIterable(final T[] array) {
+    public SearchFilterUtils(PluginLoggerFactory plf) {
+        this.log = plf.getLogger(this.getClass().toString());
+    }
+
+    private <T> Iterable<T> toIterable(final T[] array) {
         return new Iterable<T>() {
 
             @Override
@@ -41,13 +45,13 @@ public class SearchFilters {
         };
     }
 
-    public static FilterBuilder exactRefFilter(String ref) {
+    public FilterBuilder exactRefFilter(String ref) {
         return termFilter("refs.untouched", ref)
             .cache(true)
             .cacheKey("CACHE^EXACTREFFILTER^" + ref);
     }
 
-    public static FilterBuilder projectRepositoryFilter(String project, String repository) {
+    public FilterBuilder projectRepositoryFilter(String project, String repository) {
         return boolFilter()
             .must(termFilter("project", project))
             .must(termFilter("repository", repository))
@@ -55,7 +59,7 @@ public class SearchFilters {
             .cacheKey("CACHE^PROJECTREPOFILTER^" + project + "^" + repository);
     }
 
-    public static FilterBuilder aclFilter(Map<String, Repository> repoMap) {
+    public FilterBuilder aclFilter(Map<String, Repository> repoMap) {
         if (repoMap.isEmpty()) {
             return boolFilter().mustNot(matchAllFilter());
         }
@@ -90,11 +94,11 @@ public class SearchFilters {
         return filter;
     }
 
-    public static FilterBuilder refFilter(String[] refs) {
+    public FilterBuilder refFilter(String[] refs) {
         return refFilter(toIterable(refs));
     }
 
-    public static FilterBuilder refFilter(Iterable<String> refs) {
+    public FilterBuilder refFilter(Iterable<String> refs) {
         boolean filterAdded = false;
         BoolFilterBuilder filter = boolFilter();
         for (String ref : refs) {
@@ -125,11 +129,11 @@ public class SearchFilters {
         return filterAdded ? filter : matchAllFilter();
     }
 
-    public static FilterBuilder projectFilter(String[] projects) {
+    public FilterBuilder projectFilter(String[] projects) {
         return projectFilter(toIterable(projects));
     }
 
-    public static FilterBuilder projectFilter(Iterable<String> projects) {
+    public FilterBuilder projectFilter(Iterable<String> projects) {
         boolean filterAdded = false;
         BoolFilterBuilder filter = boolFilter();
         for (String project : projects) {
@@ -145,11 +149,11 @@ public class SearchFilters {
         return filterAdded ? filter : matchAllFilter();
     }
 
-    public static FilterBuilder repositoryFilter(String[] repositories) {
+    public FilterBuilder repositoryFilter(String[] repositories) {
         return repositoryFilter(toIterable(repositories));
     }
 
-    public static FilterBuilder repositoryFilter(Iterable<String> repositories) {
+    public FilterBuilder repositoryFilter(Iterable<String> repositories) {
         boolean filterAdded = false;
         BoolFilterBuilder filter = boolFilter();
         for (String repository : repositories) {
@@ -165,11 +169,11 @@ public class SearchFilters {
         return filterAdded ? filter : matchAllFilter();
     }
 
-    public static FilterBuilder extensionFilter(String[] extensions) {
+    public FilterBuilder extensionFilter(String[] extensions) {
         return extensionFilter(toIterable(extensions));
     }
 
-    public static FilterBuilder extensionFilter(Iterable<String> extensions) {
+    public FilterBuilder extensionFilter(Iterable<String> extensions) {
         boolean filterAdded = false;
         BoolFilterBuilder filter = boolFilter();
         for (String extension : extensions) {
@@ -185,11 +189,11 @@ public class SearchFilters {
         return filterAdded ? filter.should(typeFilter("commit")) : matchAllFilter();
     }
 
-    public static FilterBuilder authorFilter(String[] authors) {
+    public FilterBuilder authorFilter(String[] authors) {
         return authorFilter(toIterable(authors));
     }
 
-    public static FilterBuilder authorFilter(Iterable<String> authors) {
+    public FilterBuilder authorFilter(Iterable<String> authors) {
         boolean filterAdded = false;
         BoolFilterBuilder filter = boolFilter();
         for (String author : authors) {
@@ -227,7 +231,7 @@ public class SearchFilters {
         return filterAdded ? filter.should(typeFilter("file")) : matchAllFilter();
     }
 
-    public static FilterBuilder dateRangeFilter(ReadableInstant from, ReadableInstant to) {
+    public FilterBuilder dateRangeFilter(ReadableInstant from, ReadableInstant to) {
         if (from == null && to == null) {
             return matchAllFilter();
         }

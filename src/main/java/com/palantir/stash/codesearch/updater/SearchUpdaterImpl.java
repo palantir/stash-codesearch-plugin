@@ -23,7 +23,6 @@ import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
 import com.atlassian.stash.repository.Branch;
@@ -33,8 +32,9 @@ import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.RepositorySettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
-import com.palantir.stash.codesearch.search.SearchFilters;
+import com.palantir.stash.codesearch.search.SearchFilterUtils;
 
 public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
@@ -66,7 +66,9 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
+    private final PluginLoggerFactory plf;
+    private final Logger log;
+    private final SearchFilterUtils sfu;
 
     private final ElasticSearch es;
 
@@ -111,7 +113,10 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         GitScm gitScm,
         SettingsManager settingsManager,
         RepositoryServiceManager repositoryServiceManager,
-        SearchUpdateJobFactory jobFactory) {
+        SearchUpdateJobFactory jobFactory, PluginLoggerFactory plf, SearchFilterUtils sfu) {
+        this.plf = plf;
+        this.sfu = sfu;
+        this.log = plf.getLogger(this.getClass().toString());
         this.es = es;
         this.gitScm = gitScm;
         this.settingsManager = settingsManager;
@@ -490,7 +495,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 repository.getProject().getKey(), repository.getSlug(), ref);
             return getFinishedFuture();
         }
-        SearchUpdateJob job = jobFactory.newDefaultJob(repository, ref);
+        SearchUpdateJob job = jobFactory.newDefaultJob(sfu, plf, repository, ref);
         Runnable jobRunnable = getJobRunnable(job, reindex);
         return jobPool.schedule(jobRunnable, delayMs, TimeUnit.MILLISECONDS);
     }
@@ -576,7 +581,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 .setRouting(projectKey + '^' + repositorySlug)
                 .setQuery(QueryBuilders.filteredQuery(
                     QueryBuilders.matchAllQuery(),
-                    SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
+                    sfu.projectRepositoryFilter(projectKey, repositorySlug)))
                 .get();
             try {
                 Thread.sleep(200);

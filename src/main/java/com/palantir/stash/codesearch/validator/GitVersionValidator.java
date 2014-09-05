@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
+import org.slf4j.Logger;
+
 import com.atlassian.stash.scm.Command;
 import com.atlassian.stash.scm.CommandOutputHandler;
 import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
@@ -11,6 +13,7 @@ import com.atlassian.stash.scm.git.GitScm;
 import com.atlassian.utils.process.ProcessException;
 import com.atlassian.utils.process.Watchdog;
 import com.google.common.io.LineReader;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 
 /**
  * This component should be instantiated when the plugin is started up, allowing us to fail the plugin activation of the
@@ -24,10 +27,18 @@ public class GitVersionValidator {
     private static final Integer[] REQUIRED_GIT_VERSION = { 1, 8, 0, 0 };
     private static final String REQUIRED_GIT_VERSION_STRING = "1.8.0.0";
 
-    public GitVersionValidator(GitScm gitScm) {
-        System.out.println("Testing Git Version");
-        String gitVersion = validateVersion(gitScm);
-        System.out.println("Determined Git Version OK! (" + gitVersion + ")");
+    private final Logger log;
+
+    public GitVersionValidator(GitScm gitScm, PluginLoggerFactory plf) {
+        this.log = plf.getLogger(this.getClass().toString());
+        log.info("Testing Git Version");
+        try {
+            String gitVersion = validateVersion(gitScm);
+            log.info("Determined Git Version OK! (" + gitVersion + ")");
+        } catch (Exception e) {
+            log.error("Failed to verify git version", e);
+            throw e;
+        }
     }
 
     private String validateVersion(GitScm gitScm) {

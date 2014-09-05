@@ -8,10 +8,11 @@
         <vendor name="${project.organization.name}" url="${project.organization.url}"/>
     </plugin-info>
 
+    <component-import key="activeObjects" interface="com.atlassian.activeobjects.external.ActiveObjects"/>
+    <component-import key="applicationProperties" interface="com.atlassian.sal.api.ApplicationProperties"/>
+    <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
     <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
     <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
-    <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
-    <component-import key="activeObjects" interface="com.atlassian.activeobjects.external.ActiveObjects"/>
 
     <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
         <directory location="/templates/"/>
@@ -52,6 +53,8 @@
 
     <component key="indexer-event-listener" class="com.palantir.stash.codesearch.event.IndexerEventListener" />
     <component key="git-version-validator" class="com.palantir.stash.codesearch.validator.GitVersionValidator" />
+    <component key="plugin-logger-factorty" class="com.palantir.stash.codesearch.logger.PluginLoggerFactory" />
+    <component key="search-filters" class="com.palantir.stash.codesearch.search.SearchFilterUtils" />
 
     <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
         <label>Codesearch</label>

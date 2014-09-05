@@ -53,7 +53,6 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.atlassian.soy.renderer.SoyTemplateRenderer;
 import com.atlassian.stash.exception.AuthorisationException;
@@ -69,6 +68,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
 
 public class SearchServlet extends HttpServlet {
@@ -78,7 +78,7 @@ public class SearchServlet extends HttpServlet {
      */
     private static final long serialVersionUID = 1L;
 
-    private static final Logger log = LoggerFactory.getLogger(SearchServlet.class);
+    private final Logger log;
 
     private static final DateTimeFormatter TIME_PARSER = ISODateTimeFormat.dateTime();
 
@@ -102,6 +102,8 @@ public class SearchServlet extends HttpServlet {
 
     private final PageBuilderService pbs;
 
+    private final SearchFilterUtils sf;
+
     public SearchServlet(
         ApplicationPropertiesService propertiesService,
         ElasticSearch es,
@@ -109,7 +111,8 @@ public class SearchServlet extends HttpServlet {
         PermissionValidationService validationService,
         RepositoryServiceManager repositoryServiceManager,
         SoyTemplateRenderer soyTemplateRenderer,
-        PageBuilderService pbs) {
+        PageBuilderService pbs, SearchFilterUtils sf, PluginLoggerFactory plf) {
+        this.log = plf.getLogger(this.getClass().toString());
         this.propertiesService = propertiesService;
         this.es = es;
         this.settingsManager = settingsManager;
@@ -117,6 +120,7 @@ public class SearchServlet extends HttpServlet {
         this.repositoryServiceManager = repositoryServiceManager;
         this.soyTemplateRenderer = soyTemplateRenderer;
         this.pbs = pbs;
+        this.sf = sf;
     }
 
     private String getStringFromMap(Map<String, ? extends Object> map, String key) {
@@ -330,14 +334,14 @@ public class SearchServlet extends HttpServlet {
                 }
                 FilterBuilder filter = andFilter(
                     boolFilter().must(
-                        repoMap == null ? matchAllFilter() : SearchFilters.aclFilter(repoMap),
-                        SearchFilters.refFilter(params.refNames.split(",")),
-                        SearchFilters.projectFilter(params.projectKeys.split(",")),
-                        SearchFilters.repositoryFilter(params.repoNames.split(",")),
-                        SearchFilters.extensionFilter(params.extensions.split(",")),
-                        SearchFilters.authorFilter(params.authorNames.split(","))
+                        repoMap == null ? matchAllFilter() : sf.aclFilter(repoMap),
+                        sf.refFilter(params.refNames.split(",")),
+                        sf.projectFilter(params.projectKeys.split(",")),
+                        sf.repositoryFilter(params.repoNames.split(",")),
+                        sf.extensionFilter(params.extensions.split(",")),
+                        sf.authorFilter(params.authorNames.split(","))
                         ),
-                    SearchFilters.dateRangeFilter(params.committedAfter, params.committedBefore));
+                    sf.dateRangeFilter(params.committedAfter, params.committedBefore));
                 FilteredQueryBuilder finalQuery = filteredQuery(query, filter);
                 esReq.setQuery(finalQuery)
                     .setHighlighterPreTags("\u0001")
