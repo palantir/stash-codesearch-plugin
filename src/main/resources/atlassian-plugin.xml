@@ -51,6 +51,7 @@
     </component>
 
     <component key="indexer-event-listener" class="com.palantir.stash.codesearch.event.IndexerEventListener" />
+    <component key="git-version-validator" class="com.palantir.stash.codesearch.validator.GitVersionValidator" />
 
     <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
         <label>Codesearch</label>
