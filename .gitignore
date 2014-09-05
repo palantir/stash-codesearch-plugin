@@ -1,1 +1,7 @@
 /target
+.classpath
+.project
+.sdk.tar.gz
+.sdk/
+.settings/
+
