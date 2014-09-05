@@ -4,14 +4,16 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.scm.CommandInputHandler;
-import com.atlassian.utils.process.Watchdog;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.atlassian.stash.scm.CommandInputHandler;
+import com.atlassian.utils.process.Watchdog;
 
 class CatFileInputHandler implements CommandInputHandler {
 
@@ -21,25 +23,29 @@ class CatFileInputHandler implements CommandInputHandler {
 
     private Watchdog watchdog;
 
-    public CatFileInputHandler () {
+    public CatFileInputHandler() {
         this.objects = new ArrayList<String>();
     }
 
-    public CatFileInputHandler (Collection<String> objects) {
+    public CatFileInputHandler(Collection<String> objects) {
         this.objects = objects;
     }
 
-    public boolean addObject (String object) {
+    public boolean addObject(String object) {
         return objects.add(object);
     }
 
     @Override
-    public void complete () {}
+    public void complete() {
+    }
 
     @Override
-    public void process (OutputStream os) {
+    public void process(OutputStream os) {
         try {
             for (String object : objects) {
+                if (watchdog != null) {
+                    watchdog.resetWatchdog();
+                }
                 os.write(object.getBytes());
                 os.write('\n');
                 if (watchdog != null) {
@@ -53,7 +59,7 @@ class CatFileInputHandler implements CommandInputHandler {
     }
 
     @Override
-    public void setWatchdog (Watchdog watchdog) {
+    public void setWatchdog(Watchdog watchdog) {
         this.watchdog = watchdog;
     }
 

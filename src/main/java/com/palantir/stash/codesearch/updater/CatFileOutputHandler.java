@@ -84,6 +84,10 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
         byte[] buffer = new byte[maxFileSize + 2];
         try {
             for (int fileSize : fileSizes) {
+                if (watchdog != null) {
+                    watchdog.resetWatchdog();
+                }
+
                 // read fileSize bytes
                 is.read(); // clear newline
                 int offset = 0;

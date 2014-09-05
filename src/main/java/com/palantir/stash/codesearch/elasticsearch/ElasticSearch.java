@@ -5,7 +5,6 @@
 package com.palantir.stash.codesearch.elasticsearch;
 
 import org.elasticsearch.client.Client;
-import org.elasticsearch.node.Node;
 
 public interface ElasticSearch {
 
@@ -13,6 +12,6 @@ public interface ElasticSearch {
 
     public static final String ES_SEARCHALIAS = "scs-search";
 
-    Client getClient ();
+    Client getClient();
 
 }

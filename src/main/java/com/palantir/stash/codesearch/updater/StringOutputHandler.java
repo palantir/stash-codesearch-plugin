@@ -11,12 +11,14 @@ import org.slf4j.Logger;
 import com.atlassian.stash.io.LineReader;
 import com.atlassian.stash.io.LineReaderOutputHandler;
 import com.atlassian.stash.scm.CommandOutputHandler;
+import com.atlassian.utils.process.Watchdog;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 
 class StringOutputHandler extends LineReaderOutputHandler implements CommandOutputHandler<String> {
 
     private final StringBuilder stringBuilder;
     private final Logger log;
+    private Watchdog watchdog;
 
     public StringOutputHandler(PluginLoggerFactory plf) {
         super("UTF-8");
@@ -30,9 +32,17 @@ class StringOutputHandler extends LineReaderOutputHandler implements CommandOutp
     }
 
     @Override
+    public void setWatchdog(Watchdog watchdog) {
+        this.watchdog = watchdog;
+    }
+
+    @Override
     public void processReader(LineReader reader) {
         try {
             String line;
+            if (watchdog != null) {
+                watchdog.resetWatchdog();
+            }
             while ((line = reader.readLine()) != null) {
                 stringBuilder.append(line + "\n");
             }

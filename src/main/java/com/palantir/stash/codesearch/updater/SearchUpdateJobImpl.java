@@ -298,12 +298,12 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                 // TODO: so many warnings!  Generics, CAEN I HAZ THEM?
                 if (status.startsWith("A")) {
                     String path = diffToks[++curTok];
-                    filesToAdd.add(new SimpleEntry(newBlob, path));
+                    filesToAdd.add(new SimpleEntry<String, String>(newBlob, path));
 
                     // File copied
                 } else if (status.startsWith("C")) {
                     String toPath = diffToks[curTok += 2];
-                    filesToAdd.add(new SimpleEntry(newBlob, toPath));
+                    filesToAdd.add(new SimpleEntry<String, String>(newBlob, toPath));
 
                     // File deleted
                 } else if (status.startsWith("D")) {
@@ -315,7 +315,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     String path = diffToks[++curTok];
                     if (!oldBlob.equals(newBlob)) {
                         requestBuffer.add(buildDeleteFileFromRef(client, oldBlob, path));
-                        filesToAdd.add(new SimpleEntry(newBlob, path));
+                        filesToAdd.add(new SimpleEntry<String, String>(newBlob, path));
                     }
 
                     // File renamed
@@ -323,7 +323,7 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
                     String fromPath = diffToks[++curTok];
                     String toPath = diffToks[++curTok];
                     requestBuffer.add(buildDeleteFileFromRef(client, oldBlob, fromPath));
-                    filesToAdd.add(new SimpleEntry(newBlob, toPath));
+                    filesToAdd.add(new SimpleEntry<String, String>(newBlob, toPath));
 
                     // Unknown change
                 } else if (status.startsWith("X")) {
