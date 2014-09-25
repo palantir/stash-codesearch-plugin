@@ -162,9 +162,9 @@
         </dependency>
     </dependencies>
     <properties>
-        <amps.version>5.0.3</amps.version>
-        <stash.version>3.2.2</stash.version>
-        <stash.data.version>3.2.2</stash.data.version>
+        <amps.version>5.0.4</amps.version>
+        <stash.version>3.3.0</stash.version>
+        <stash.data.version>3.3.0</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
         <ao.version>0.21.2</ao.version>
     </properties>
