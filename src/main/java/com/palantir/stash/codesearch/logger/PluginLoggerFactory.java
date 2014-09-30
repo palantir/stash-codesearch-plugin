@@ -22,7 +22,7 @@ import com.atlassian.sal.api.ApplicationProperties;
  */
 public class PluginLoggerFactory {
 
-    private static final String ROOT = "com.palantir.stash.signupmanager";
+    private static final String ROOT = "com.palantir.stash.codesearch";
     private static final Logger stashRootLogger = LoggerFactory.getLogger("ROOT");
 
     private LoggerContext context;
