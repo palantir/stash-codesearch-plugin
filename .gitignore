@@ -4,4 +4,6 @@
 .sdk.tar.gz
 .sdk/
 .settings/
+.es/
+.es.tar.gz
 
