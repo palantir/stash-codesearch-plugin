@@ -147,11 +147,24 @@
             <artifactId>commons-codec</artifactId>
             <version>1.9</version>
         </dependency>
+        <!-- needed for logger -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <!-- <version>1.0.11</version>  version from stash-parent/pom.xml -->
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.atlassian.sal</groupId>
+            <artifactId>sal-api</artifactId>
+            <!-- <version>2.10.9</version> version from stash-parent/pom.xml -->
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
     <properties>
-        <amps.version>5.0.3</amps.version>
-        <stash.version>3.2.2</stash.version>
-        <stash.data.version>3.2.2</stash.data.version>
+        <amps.version>5.0.4</amps.version>
+        <stash.version>3.3.0</stash.version>
+        <stash.data.version>3.3.0</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
         <ao.version>0.21.2</ao.version>
     </properties>

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
@@ -23,7 +24,6 @@ import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
 import com.atlassian.stash.repository.Branch;
@@ -33,13 +33,18 @@ import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.RepositorySettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
 import com.palantir.stash.codesearch.elasticsearch.ElasticSearch;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 import com.palantir.stash.codesearch.repository.RepositoryServiceManager;
-import com.palantir.stash.codesearch.search.SearchFilters;
+import com.palantir.stash.codesearch.search.SearchFilterUtils;
 
 public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
 
     private static class ResizableSemaphore extends Semaphore {
 
+        /**
+         * 
+         */
+        private static final long serialVersionUID = 1L;
         private int curSize = 0;
 
         public ResizableSemaphore(int permits) {
@@ -52,10 +57,6 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
             curSize = permits;
         }
 
-        public int getCurSize() {
-            return curSize;
-        }
-
         public void resize(int newSize) {
             if (newSize > curSize) {
                 release(newSize - curSize);
@@ -66,7 +67,9 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(SearchUpdaterImpl.class);
+    private final PluginLoggerFactory plf;
+    private final Logger log;
+    private final SearchFilterUtils sfu;
 
     private final ElasticSearch es;
 
@@ -111,7 +114,10 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         GitScm gitScm,
         SettingsManager settingsManager,
         RepositoryServiceManager repositoryServiceManager,
-        SearchUpdateJobFactory jobFactory) {
+        SearchUpdateJobFactory jobFactory, PluginLoggerFactory plf, SearchFilterUtils sfu) {
+        this.plf = plf;
+        this.sfu = sfu;
+        this.log = plf.getLogger(this.getClass().toString());
         this.es = es;
         this.gitScm = gitScm;
         this.settingsManager = settingsManager;
@@ -401,11 +407,11 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     /**
      * Returns a new runnable that executes a search updater job.
      */
-    private Runnable getJobRunnable(final SearchUpdateJob job, final boolean reindex) {
-        return new Runnable() {
+    private Callable<Void> getJobRunnable(final SearchUpdateJob job, final boolean reindex) {
+        return new Callable<Void>() {
 
             @Override
-            public void run() {
+            public Void call() throws Exception {
                 acquireLock(job);
                 semaphore.acquireUninterruptibly();
                 try {
@@ -413,7 +419,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                     if (!globalSettings.getIndexingEnabled()) {
                         log.warn("Not executing SearchUpdateJob {} since indexing is disabled",
                             job.toString());
-                        return;
+                        return null;
                     }
                     if (reindex) {
                         job.doReindex(es.getClient(), gitScm, globalSettings);
@@ -426,13 +432,14 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                     releaseLock(job);
                     semaphore.release();
                 }
+                return null;
             }
         };
     }
 
     // Returns a dummy finished Future object
-    private Future getFinishedFuture() {
-        return new Future() {
+    private Future<Void> getFinishedFuture() {
+        return new Future<Void>() {
 
             @Override
             public boolean cancel(boolean whatever) {
@@ -461,7 +468,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         };
     }
 
-    private Future submitAsyncUpdateImpl(Repository repository, String ref,
+    private Future<Void> submitAsyncUpdateImpl(Repository repository, String ref,
         int delayMs, boolean reindex) {
         RepositorySettings repositorySettings = settingsManager.getRepositorySettings(repository);
         String refRegex = repositorySettings.getRefRegex();
@@ -490,13 +497,14 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 repository.getProject().getKey(), repository.getSlug(), ref);
             return getFinishedFuture();
         }
-        SearchUpdateJob job = jobFactory.newDefaultJob(repository, ref);
-        Runnable jobRunnable = getJobRunnable(job, reindex);
-        return jobPool.schedule(jobRunnable, delayMs, TimeUnit.MILLISECONDS);
+        SearchUpdateJob job = jobFactory.newDefaultJob(sfu, plf, repository, ref);
+        Callable<Void> jobCallable = getJobRunnable(job, reindex);
+        Future<Void> ret = jobPool.schedule(jobCallable, delayMs, TimeUnit.MILLISECONDS);
+        return ret;
     }
 
     // Waits uninterruptibly for a future to be satisfied
-    private void waitForFuture(Future future) {
+    private void waitForFuture(Future<Void> future) {
         boolean done = false;
         while (!done) {
             try {
@@ -518,12 +526,12 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     }
 
     @Override
-    public Future submitAsyncUpdate(Repository repository, String ref, int delayMs) {
+    public Future<Void> submitAsyncUpdate(Repository repository, String ref, int delayMs) {
         return submitAsyncUpdateImpl(repository, ref, delayMs, false);
     }
 
     @Override
-    public Future submitAsyncReindex(Repository repository, String ref, int delayMs) {
+    public Future<Void> submitAsyncReindex(Repository repository, String ref, int delayMs) {
         return submitAsyncUpdateImpl(repository, ref, delayMs, true);
     }
 
@@ -576,7 +584,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 .setRouting(projectKey + '^' + repositorySlug)
                 .setQuery(QueryBuilders.filteredQuery(
                     QueryBuilders.matchAllQuery(),
-                    SearchFilters.projectRepositoryFilter(projectKey, repositorySlug)))
+                    sfu.projectRepositoryFilter(projectKey, repositorySlug)))
                 .get();
             try {
                 Thread.sleep(200);
@@ -595,12 +603,12 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         }
 
         // Submit and wait for each job
-        List<Future> futures = new ArrayList<Future>();
+        List<Future<Void>> futures = new ArrayList<Future<Void>>();
         for (Branch branch : repositoryServiceManager.getBranchMap(repository).values()) {
             // No need to explicitly trigger reindex, since index is empty.
             futures.add(submitAsyncUpdate(repository, branch.getId(), 0));
         }
-        for (Future future : futures) {
+        for (Future<Void> future : futures) {
             waitForFuture(future);
         }
 
@@ -635,14 +643,14 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
                 .get();
 
             // Submit and wait for each job
-            List<Future> futures = new ArrayList<Future>();
+            List<Future<Void>> futures = new ArrayList<Future<Void>>();
             for (Repository repo : repositoryServiceManager.getRepositoryMap(null).values()) {
                 for (Branch branch : repositoryServiceManager.getBranchMap(repo).values()) {
                     // No need to explicitly trigger reindex, since index is empty.
                     futures.add(submitAsyncUpdate(repo, branch.getId(), 0));
                 }
             }
-            for (Future future : futures) {
+            for (Future<Void> future : futures) {
                 waitForFuture(future);
             }
 
@@ -655,8 +663,8 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
             redirectAndDeleteAliasedIndex(ES_SEARCHALIAS, ES_UPDATEALIAS);
         } finally {
             isReindexingAll.getAndSet(false);
-            return true;
         }
+        return true;
     }
 
     @Override

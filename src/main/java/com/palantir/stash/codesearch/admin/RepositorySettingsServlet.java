@@ -177,6 +177,13 @@ public class RepositorySettingsServlet extends HttpServlet {
                     @Override
                     public void run() {
                         try {
+                            /* XXX: Is this really necessary?  Users of the
+                             * configuration page are already repo admins, I
+                             * think, and it doesn't look like reindexing does
+                             * anything that needs this permission (although
+                             * maybe you need to have permission to see all
+                             * branches, which  a repo admin has?)
+                             */
                             EscalatedSecurityContext esc =
                                 securityService.withPermission(Permission.REPO_ADMIN, "reindex by repo admin");
                             esc.call(new Operation<Void, Exception>() {

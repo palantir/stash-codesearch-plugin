@@ -10,14 +10,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.atlassian.stash.scm.CommandOutputHandler;
 import com.atlassian.utils.process.Watchdog;
+import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 
 class CatFileOutputHandler implements CommandOutputHandler<String[]> {
 
-    private static final Logger log = LoggerFactory.getLogger(CatFileOutputHandler.class);
+    private final Logger log;
 
     private static final boolean[] BINARY_BYTES = new boolean[256];
 
@@ -47,11 +47,12 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
     // TODO: unused
     private Watchdog watchdog;
 
-    public CatFileOutputHandler() {
-        this(new ArrayList<Integer>());
+    public CatFileOutputHandler(PluginLoggerFactory plf) {
+        this(plf, new ArrayList<Integer>());
     }
 
-    public CatFileOutputHandler(Collection<Integer> fileSizes) {
+    public CatFileOutputHandler(PluginLoggerFactory plf, Collection<Integer> fileSizes) {
+        this.log = plf.getLogger(this.getClass().toString());
         this.fileSizes = fileSizes;
         this.outputFiles = new ArrayList<String>();
         this.maxFileSize = 0;
@@ -83,6 +84,10 @@ class CatFileOutputHandler implements CommandOutputHandler<String[]> {
         byte[] buffer = new byte[maxFileSize + 2];
         try {
             for (int fileSize : fileSizes) {
+                if (watchdog != null) {
+                    watchdog.resetWatchdog();
+                }
+
                 // read fileSize bytes
                 is.read(); // clear newline
                 int offset = 0;

@@ -1,12 +1,13 @@
 # Stash Codesearch
 
-Stash Codesearch is a service for searching and analyzing files and commits in Atlassian Stash Git repositories. It is backed by ElasticSearch (v1.1).
+Stash Codesearch is a service for searching and analyzing files and commits in Atlassian Stash Git repositories. It is backed by ElasticSearch (v1.3.3).
 
+Stash Codesearch was written by Palantir Technologies and open-sourced under the Apache 2.0 license.
 
 ## Authors
 
 - Jerry Ma (2014, Palantir Technologies)
-
+- Carl Myers (2014, Palantir Technologies)
 
 ## Compilation
 
@@ -19,17 +20,22 @@ Stash Codesearch is a service for searching and analyzing files and commits in A
 Before installing, you should have:
 
 - A running Atlassian Stash instance
-- A running ElasticSearch (v1.1) node
+- A running ElasticSearch (v1.3.3) node
   - cluster name: `stash-codesearch`
   - transport listening on `localhost:9300`
+
+You can obtain an instance of ElasticSearch by running the provided bin/install-elasticsearch-instance.sh script.
 
 To install:
 
 - Compile the Stash plugin (see [above](#compile-guide)).
 - Upload the `target/stash-code-search-VERSION.jar` file to your Stash instance's plugin manager (`http://stash.url/plugins/servlet/upm`).
 
-Note: you must enable indexing and trigger a reindex after installation (see [below](#administration) for instructions).
+Note: you must enable global indexing and trigger a reindex after installation (see [below](#administration) for instructions).
 
+## Testing
+
+To test locally, you must run a local instance of ElasticSearch.  You can do this by invoking the provided bin/invoke-es.sh before running atlas-run from the Atlassian plugin SDK.
 
 ## Administration
 
