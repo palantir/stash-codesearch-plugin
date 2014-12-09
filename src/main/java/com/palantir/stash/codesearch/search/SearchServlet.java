@@ -339,7 +339,8 @@ public class SearchServlet extends HttpServlet {
                         sf.projectFilter(params.projectKeys.split(",")),
                         sf.repositoryFilter(params.repoNames.split(",")),
                         sf.extensionFilter(params.extensions.split(",")),
-                        sf.authorFilter(params.authorNames.split(","))
+                        sf.authorFilter(params.authorNames.split(",")),
+                        params.noPersonal ? sf.personalFilter() : matchAllFilter()
                         ),
                     sf.dateRangeFilter(params.committedAfter, params.committedBefore));
                 FilteredQueryBuilder finalQuery = filteredQuery(query, filter);
@@ -530,6 +531,7 @@ public class SearchServlet extends HttpServlet {
         public final boolean searchCode;
         public final boolean searchFilenames;
         public final boolean searchCommits;
+        public final boolean noPersonal;
         public final String projectKeys;
         public final String repoNames;
         public final String refNames;
@@ -542,15 +544,16 @@ public class SearchServlet extends HttpServlet {
 
         private SearchParams(boolean doSearch, String searchString, boolean showStatistics,
             boolean searchCode, boolean searchFilenames, boolean searchCommits,
-            String projectKeys, String repoNames, String refNames, String extensions,
-            String authorNames, int page, String committedAfterStr, String committedBeforeStr,
-            DateTimeZone tz) {
+            boolean noPersonal, String projectKeys, String repoNames, String refNames,
+            String extensions, String authorNames, int page, String committedAfterStr,
+            String committedBeforeStr, DateTimeZone tz) {
             this.doSearch = doSearch;
             this.searchString = searchString;
             this.showStatistics = showStatistics;
             this.searchCode = searchCode;
             this.searchFilenames = searchFilenames;
             this.searchCommits = searchCommits;
+            this.noPersonal = noPersonal;
             this.projectKeys = projectKeys;
             this.repoNames = repoNames;
             this.refNames = refNames;
@@ -563,6 +566,7 @@ public class SearchServlet extends HttpServlet {
                 .put("searchCode", searchCode)
                 .put("searchFilenames", searchFilenames)
                 .put("searchCommits", searchCommits)
+                .put("noPersonal", noPersonal)
                 .put("projectKeys", projectKeys)
                 .put("repoNames", repoNames)
                 .put("refNames", refNames)
@@ -610,9 +614,10 @@ public class SearchServlet extends HttpServlet {
             boolean searchCode = "on".equals(req.getParameter("searchCode"));
             boolean searchFilenames = "on".equals(req.getParameter("searchFilenames"));
             boolean searchCommits = "on".equals(req.getParameter("searchCommits"));
-            if (!searchFilenames && !searchCode && !searchCommits) {
+            boolean noPersonal = "on".equals(req.getParameter("noPersonal"));
+            if (!searchFilenames && !searchCode && !searchCommits && !noPersonal) {
                 // Reset checkboxes
-                searchFilenames = searchCode = searchCommits = true;
+                searchFilenames = searchCode = searchCommits = noPersonal = true;
             }
 
             String projectKeys = req.getParameter("projectKeys");
@@ -658,8 +663,9 @@ public class SearchServlet extends HttpServlet {
             }
 
             return new SearchParams(doSearch, searchString, showStatistics, searchCode,
-                searchFilenames, searchCommits, projectKeys, repoNames, refNames, extensions,
-                authorNames, page, committedAfterStr, committedBeforeStr, tz);
+                searchFilenames, searchCommits, noPersonal, projectKeys, repoNames,
+                refNames, extensions, authorNames, page, committedAfterStr, committedBeforeStr,
+                tz);
         }
     }
 
