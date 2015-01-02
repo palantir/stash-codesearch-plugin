@@ -471,7 +471,7 @@ public class SearchServlet extends HttpServlet {
                 .put("statistics", statistics)
                 .put("error", error)
                 .put("fullUri", fullUri)
-                .put("baseUrl", propertiesService.getBaseUrl())
+                .put("baseUrl", propertiesService.getBaseUrl().toASCIIString())
                 .put("resultFrom", Math.min(totalHits, params.page * pageSize + 1))
                 .put("resultTo", Math.min(totalHits, (params.page + 1) * pageSize))
                 .put("searchTime", searchTime)
