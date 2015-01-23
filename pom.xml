@@ -46,8 +46,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>2.4</version>
                 <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
         </plugins>
@@ -163,8 +163,8 @@
     </dependencies>
     <properties>
         <amps.version>5.0.4</amps.version>
-        <stash.version>3.3.0</stash.version>
-        <stash.data.version>3.3.0</stash.data.version>
+        <stash.version>3.6.0</stash.version>
+        <stash.data.version>3.6.0</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
         <ao.version>0.21.2</ao.version>
     </properties>
