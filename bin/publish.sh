@@ -4,17 +4,26 @@ set -e
 
 ./bin/invoke-sdk.sh clean test package
 
+file_prefix="stash-code-search-"
+deploy_prefix="com.palantir.stash/stash-code-search"
+release_prefix="pt-releases/atlassian/stash-code-search"
+release_filename="stash-code-search.jar"
+
 creds=$HOME/.gradle/gradle.properties
 
-version=`git describe --abbrev=12 | sed -e 's/-/./g'`
-# TODO: if contains -gXXXX, publish snapshot?
+# version is set by maven using domain version semantics now
+version=`echo target/$file_prefix*.jar | sed -e "s/target\/$file_prefix//" | sed -e 's/.jar$//' | sed -e 's/\//-/g'`
+if grep -q 'release-' <<< "$version"; then
+    version=`sed -e 's/^release-//g' <<< "$version"`
+    release="true"
+fi
 
 if [ "$version" == "" ]; then
   echo "Error: unable to determine version"
   exit 3
 fi
 
-deploy_path=com.palantir.stash/stash-code-search-plugin/$version
+deploy_path=$deploy_prefix/$version
 
 if [ ! -f "$creds" ]; then
   echo "Error: missing credentials file: $creds"
@@ -30,7 +39,7 @@ if [ "$pub_url" == "" -o "$user" == "" -o "$pass" == "" ]; then
   exit 2
 fi
 
-file=`ls target/stash-code-search--*.jar | sed -e 's/target\///'`
+file=`ls target/$file_prefix*.jar | sed -e 's/target\///'`
 
 if [ ! -f "target/$file" ]; then
   echo "Artifact not found: $file"
@@ -45,12 +54,12 @@ curl -XPUT -L                    \
      -H "X-Checksum-Md5: $md5"   \
      -u "$user:$pass"            \
       --data-binary @"target/${file}"   \
-     "${pub_url}/${deploy_path}/stash-code-search.jar"
+      "${pub_url}/${deploy_path}/${file_prefix}${version}.jar"
 
-# publish to releases artifactory server if we are on an exact tag
-if [ $(git describe --exact-match) ]; then
-    echo "Detected official release, publishing"
-    ./bin/publishRelease.sh target/${file} pt-releases/atlassian/stash-code-search-plugin/${version}/stash-code-search-plugin.jar
+# publish to releases as well if version matches a release pattern - which is "^\d+\.\d+\.\d+.*"
+if git describe --exact-match >/dev/null 2>/dev/null; then
+    echo "Detected version that looks like an official release, publishing"
+    ./bin/publishRelease.sh target/${file} $release_prefix/$version/$release_filename
 else
     echo "Not a release, not publishing"
 fi
