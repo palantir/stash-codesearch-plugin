@@ -167,6 +167,7 @@
         <stash.data.version>3.6.0</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
         <ao.version>0.21.2</ao.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <profiles>
         <profile>
