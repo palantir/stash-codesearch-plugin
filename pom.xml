@@ -123,7 +123,7 @@
         <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch</artifactId>
-            <version>1.1.0</version>
+            <version>${elasticsearch.version}</version>
         </dependency>
         <dependency>
             <groupId>joda-time</groupId>
@@ -167,6 +167,7 @@
         <stash.data.version>3.0.1</stash.data.version>
         <stash.containerId>tomcat7x</stash.containerId>
         <ao.version>0.21.2</ao.version>
+        <elasticsearch.version>1.6.0</elasticsearch.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <profiles>
