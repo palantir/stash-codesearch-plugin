@@ -1,0 +1,6 @@
+language: java
+jdk: oraclejdk8
+
+install: (cd /tmp; wget https://maven.atlassian.com/content/repositories/atlassian-public/com/atlassian/amps/atlassian-plugin-sdk/5.0.13/atlassian-plugin-sdk-5.0.13.tar.gz; tar xzf atlassian-plugin-sdk-5.0.13.tar.gz)
+
+script: /tmp/atlassian-plugin-sdk-5.0.13/bin/atlas-mvn package
