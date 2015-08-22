@@ -7,14 +7,14 @@
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>INFO</level>
         </filter>
-        <file>${stash.home}/logs/scs-plugin.log</file>
+        <file>${stash.home}/log/scs-plugin.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
     <appender name="scs-plugin-debug" class="ch.qos.logback.core.FileAppender">
-        <file>${stash.home}/logs/scs-plugin-debug.log</file>
+        <file>${stash.home}/log/scs-plugin-debug.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
