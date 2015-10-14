@@ -26,9 +26,9 @@ import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.SearchHit;
 import org.slf4j.Logger;
 
-import com.atlassian.stash.repository.Repository;
-import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
-import com.atlassian.stash.scm.git.GitScm;
+import com.atlassian.bitbucket.repository.Repository;
+import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
+import com.atlassian.bitbucket.scm.git.GitScm;
 import com.google.common.collect.ImmutableList;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.elasticsearch.RequestBuffer;

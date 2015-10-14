@@ -11,7 +11,7 @@ import java.util.Collection;
 
 import org.slf4j.Logger;
 
-import com.atlassian.stash.scm.CommandOutputHandler;
+import com.atlassian.bitbucket.scm.CommandOutputHandler;
 import com.atlassian.utils.process.Watchdog;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 

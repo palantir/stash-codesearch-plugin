@@ -24,7 +24,7 @@ import org.elasticsearch.index.query.RangeFilterBuilder;
 import org.joda.time.ReadableInstant;
 import org.slf4j.Logger;
 
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 import com.google.common.collect.Iterators;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 

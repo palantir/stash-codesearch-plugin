@@ -9,7 +9,7 @@ package com.palantir.stash.codesearch.updater;
 
 import java.util.concurrent.Future;
 
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 
 public interface SearchUpdater {
 

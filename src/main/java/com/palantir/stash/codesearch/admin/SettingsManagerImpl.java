@@ -5,7 +5,7 @@
 package com.palantir.stash.codesearch.admin;
 
 import com.atlassian.activeobjects.external.ActiveObjects;
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 import java.util.ArrayList;
 import java.util.List;

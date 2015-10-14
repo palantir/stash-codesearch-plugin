@@ -10,13 +10,13 @@
 
     <component-import key="activeObjects" interface="com.atlassian.activeobjects.external.ActiveObjects"/>
     <component-import key="applicationProperties" interface="com.atlassian.sal.api.ApplicationProperties"/>
-    <component-import key="gitScm" interface="com.atlassian.stash.scm.git.GitScm"/>
+    <component-import key="gitScm" interface="com.atlassian.bitbucket.scm.git.GitScm"/>
     <component-import key="soyTemplateRenderer" interface="com.atlassian.soy.renderer.SoyTemplateRenderer" filter=""/>
     <component-import key="userManager" interface="com.atlassian.sal.api.user.UserManager" filter=""/>
 
     <stash-resource key="codesearch-soy" name="Codesearch Soy Templates">
         <directory location="/templates/"/>
-        <dependency>com.atlassian.stash.stash-web-plugin:global</dependency>
+        <dependency>com.atlassian.bitbucket.stash-web-plugin:global</dependency>
     </stash-resource>
 
     <web-resource key="scs-resources" name="SCS Resources">
@@ -59,7 +59,7 @@
     <web-item key="search-servlet-global-link" name="Codesearch" section="header.global.primary" weight="200">
         <label>Codesearch</label>
         <link>/plugins/servlet/codesearch/search</link>
-        <condition class="com.atlassian.stash.web.conditions.IsLoggedInCondition"/>
+        <condition class="com.atlassian.bitbucket.web.conditions.IsLoggedInCondition"/>
     </web-item>
 
     <web-item key="search-servlet-projectpage-link" name="Codesearch" section="stash.project.overview.actions" weight="200">
