@@ -7,6 +7,7 @@ package com.palantir.stash.codesearch.search;
 import static org.elasticsearch.index.query.FilterBuilders.boolFilter;
 import static org.elasticsearch.index.query.FilterBuilders.matchAllFilter;
 import static org.elasticsearch.index.query.FilterBuilders.orFilter;
+import static org.elasticsearch.index.query.FilterBuilders.prefixFilter;
 import static org.elasticsearch.index.query.FilterBuilders.rangeFilter;
 import static org.elasticsearch.index.query.FilterBuilders.termFilter;
 import static org.elasticsearch.index.query.FilterBuilders.typeFilter;
@@ -23,7 +24,7 @@ import org.elasticsearch.index.query.RangeFilterBuilder;
 import org.joda.time.ReadableInstant;
 import org.slf4j.Logger;
 
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 import com.google.common.collect.Iterators;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 
@@ -127,6 +128,13 @@ public class SearchFilterUtils {
             filterAdded = true;
         }
         return filterAdded ? filter : matchAllFilter();
+    }
+
+    public FilterBuilder personalFilter() {
+        BoolFilterBuilder filter = boolFilter();
+        filter.mustNot(prefixFilter("project", "~")
+                .cache(true));
+        return filter;
     }
 
     public FilterBuilder projectFilter(String[] projects) {

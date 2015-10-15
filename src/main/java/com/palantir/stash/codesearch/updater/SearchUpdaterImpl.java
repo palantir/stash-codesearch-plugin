@@ -26,9 +26,9 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.DisposableBean;
 
-import com.atlassian.stash.repository.Branch;
-import com.atlassian.stash.repository.Repository;
-import com.atlassian.stash.scm.git.GitScm;
+import com.atlassian.bitbucket.repository.Branch;
+import com.atlassian.bitbucket.repository.Repository;
+import com.atlassian.bitbucket.scm.git.GitScm;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.admin.RepositorySettings;
 import com.palantir.stash.codesearch.admin.SettingsManager;
@@ -42,7 +42,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
     private static class ResizableSemaphore extends Semaphore {
 
         /**
-         * 
+         *
          */
         private static final long serialVersionUID = 1L;
         private int curSize = 0;
@@ -475,7 +475,7 @@ public class SearchUpdaterImpl implements SearchUpdater, DisposableBean {
         try {
             String defaultBranch = null;
             try {
-                defaultBranch = repositoryServiceManager.getRepositoryMetadataService()
+                defaultBranch = repositoryServiceManager.getRefService()
                     .getDefaultBranch(repository)
                     .getId();
             } catch (Exception e) {

@@ -22,12 +22,13 @@ import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.update.UpdateRequestBuilder;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.SearchHit;
 import org.slf4j.Logger;
 
-import com.atlassian.stash.repository.Repository;
-import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
-import com.atlassian.stash.scm.git.GitScm;
+import com.atlassian.bitbucket.repository.Repository;
+import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
+import com.atlassian.bitbucket.scm.git.GitScm;
 import com.google.common.collect.ImmutableList;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import com.palantir.stash.codesearch.elasticsearch.RequestBuffer;
@@ -172,7 +173,8 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     private UpdateRequestBuilder buildDeleteFromRef(Client client, String type, String id) {
         return client.prepareUpdate(ES_UPDATEALIAS, type, id)
             .setScript("ctx._source.refs.contains(ref) ? ((ctx._source.refs.size() > 1) " +
-                "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")")
+                "? (ctx._source.refs.remove(ref)) : (ctx.op = \"delete\")) : (ctx.op = \"none\")",
+                ScriptService.ScriptType.INLINE)
             .setScriptLang("mvel")
             .addScriptParam("ref", ref)
             .setRetryOnConflict(MAX_ES_RETRIES)
@@ -183,7 +185,8 @@ class SearchUpdateJobImpl implements SearchUpdateJob {
     private UpdateRequestBuilder buildAddToRef(Client client, String type, String id) {
         return client.prepareUpdate(ES_UPDATEALIAS, type, id)
             .setScript("ctx._source.refs.contains(ref) " +
-                "? (ctx.op = \"none\") : (ctx._source.refs += ref)")
+                "? (ctx.op = \"none\") : (ctx._source.refs += ref)",
+                ScriptService.ScriptType.INLINE)
             .setScriptLang("mvel")
             .addScriptParam("ref", ref)
             .setRetryOnConflict(MAX_ES_RETRIES)

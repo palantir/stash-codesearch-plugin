@@ -4,8 +4,8 @@
 
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.repository.Repository;
-import com.atlassian.stash.scm.git.GitScm;
+import com.atlassian.bitbucket.repository.Repository;
+import com.atlassian.bitbucket.scm.git.GitScm;
 import com.palantir.stash.codesearch.admin.GlobalSettings;
 import org.elasticsearch.client.Client;
 

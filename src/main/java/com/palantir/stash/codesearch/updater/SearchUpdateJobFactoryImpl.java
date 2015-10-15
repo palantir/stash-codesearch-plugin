@@ -1,6 +1,6 @@
 package com.palantir.stash.codesearch.updater;
 
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 import com.palantir.stash.codesearch.search.SearchFilterUtils;
 

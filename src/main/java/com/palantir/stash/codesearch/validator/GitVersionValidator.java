@@ -6,10 +6,10 @@ import java.io.InputStreamReader;
 
 import org.slf4j.Logger;
 
-import com.atlassian.stash.scm.Command;
-import com.atlassian.stash.scm.CommandOutputHandler;
-import com.atlassian.stash.scm.git.GitCommandBuilderFactory;
-import com.atlassian.stash.scm.git.GitScm;
+import com.atlassian.bitbucket.scm.Command;
+import com.atlassian.bitbucket.scm.CommandOutputHandler;
+import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
+import com.atlassian.bitbucket.scm.git.GitScm;
 import com.atlassian.utils.process.ProcessException;
 import com.atlassian.utils.process.Watchdog;
 import com.google.common.io.LineReader;
@@ -18,9 +18,9 @@ import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 /**
  * This component should be instantiated when the plugin is started up, allowing us to fail the plugin activation of the
  * version of git is detected to be incompatible.
- * 
+ *
  * @author cmyers
- * 
+ *
  */
 public class GitVersionValidator {
 

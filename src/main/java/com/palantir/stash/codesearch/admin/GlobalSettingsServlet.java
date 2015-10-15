@@ -42,20 +42,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.atlassian.soy.renderer.SoyTemplateRenderer;
-import com.atlassian.stash.exception.AuthorisationException;
-import com.atlassian.stash.server.ApplicationPropertiesService;
-import com.atlassian.stash.user.EscalatedSecurityContext;
-import com.atlassian.stash.user.Permission;
-import com.atlassian.stash.user.PermissionValidationService;
-import com.atlassian.stash.user.SecurityService;
-import com.atlassian.stash.util.Operation;
+import com.atlassian.bitbucket.AuthorisationException;
+import com.atlassian.bitbucket.server.ApplicationPropertiesService;
+import com.atlassian.bitbucket.user.EscalatedSecurityContext;
+import com.atlassian.bitbucket.permission.Permission;
+import com.atlassian.bitbucket.permission.PermissionValidationService;
+import com.atlassian.bitbucket.user.SecurityService;
+import com.atlassian.bitbucket.util.Operation;
 import com.google.common.collect.ImmutableMap;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 
 public class GlobalSettingsServlet extends HttpServlet {
 
     /**
-     * 
+     *
      */
     private static final long serialVersionUID = 1L;
 
@@ -141,7 +141,7 @@ public class GlobalSettingsServlet extends HttpServlet {
         }
         try {
             validationService.validateForGlobal(Permission.SYS_ADMIN);
-        } catch (AuthorisationException notSysAdminException) {
+        } catch ( AuthorisationException notSysAdminException) {
             log.warn("User {} is not a system administrator", req.getRemoteUser());
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "You do not have permission to access this page.");
             return false;

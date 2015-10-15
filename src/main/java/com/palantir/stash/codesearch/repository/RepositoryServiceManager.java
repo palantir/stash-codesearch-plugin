@@ -4,8 +4,8 @@
 
 package com.palantir.stash.codesearch.repository;
 
-import com.atlassian.stash.repository.*;
-import com.atlassian.stash.user.PermissionValidationService;
+import com.atlassian.bitbucket.repository.*;
+import com.atlassian.bitbucket.permission.PermissionValidationService;
 import com.google.common.collect.ImmutableMap;
 
 public interface RepositoryServiceManager {
@@ -20,6 +20,6 @@ public interface RepositoryServiceManager {
 
     RepositoryService getRepositoryService ();
 
-    RepositoryMetadataService getRepositoryMetadataService ();
+    RefService getRefService ();
 
 }

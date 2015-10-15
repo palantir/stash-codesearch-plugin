@@ -3,7 +3,7 @@
  */
 
 package com.palantir.stash.codesearch.admin;
-import com.atlassian.stash.repository.Repository;
+import com.atlassian.bitbucket.repository.Repository;
 import com.palantir.stash.codesearch.updater.SearchUpdater;
 
 public interface SettingsManager {

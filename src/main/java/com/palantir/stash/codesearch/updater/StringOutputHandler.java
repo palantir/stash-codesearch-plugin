@@ -8,9 +8,9 @@ import java.io.IOException;
 
 import org.slf4j.Logger;
 
-import com.atlassian.stash.io.LineReader;
-import com.atlassian.stash.io.LineReaderOutputHandler;
-import com.atlassian.stash.scm.CommandOutputHandler;
+import com.atlassian.bitbucket.io.LineReader;
+import com.atlassian.bitbucket.io.LineReaderOutputHandler;
+import com.atlassian.bitbucket.scm.CommandOutputHandler;
 import com.atlassian.utils.process.Watchdog;
 import com.palantir.stash.codesearch.logger.PluginLoggerFactory;
 

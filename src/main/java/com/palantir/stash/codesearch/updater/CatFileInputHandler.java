@@ -12,7 +12,7 @@ import java.util.Collection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.atlassian.stash.scm.CommandInputHandler;
+import com.atlassian.bitbucket.scm.CommandInputHandler;
 import com.atlassian.utils.process.Watchdog;
 
 class CatFileInputHandler implements CommandInputHandler {

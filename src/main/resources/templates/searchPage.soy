@@ -97,6 +97,11 @@
                                     <input class="checkbox" type="checkbox" name="searchCommits" id="searchCommits"
                                         {if $prevParams.searchCommits == null or $prevParams.searchCommits}checked{/if}>
                                 </div>
+                                <div class="checkbox">
+                                    <label for="noPersonal">Exclude user projects</label>
+                                    <input class="checkbox" type="checkbox" name="noPersonal" id="noPersonal"
+                                        {if $prevParams.noPersonal == null or $prevParams.noPersonal}checked{/if}>
+                                </div>
                                 <div class="field-group">
                                     <label for="projectKeys">Project keys</label>
                                     <input class="text medium-field" type="text" name="projectKeys" id="projectKeys"
